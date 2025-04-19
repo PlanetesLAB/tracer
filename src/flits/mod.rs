@@ -1,9 +1,10 @@
+pub mod config;
 pub mod constants;
 pub mod continuum;
 pub mod delaunay;
 pub mod io;
 pub mod lines;
-pub mod lte;
+pub mod local;
 pub mod paths;
 pub mod structure;
 pub mod utils;
