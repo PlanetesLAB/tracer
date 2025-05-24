@@ -1,5 +1,4 @@
 pub mod config;
-pub mod constants;
 pub mod continuum;
 pub mod delaunay;
 pub mod io;
