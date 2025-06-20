@@ -89,43 +89,6 @@ impl Default for FLITSConfig {
     }
 }
 
-impl FLITSConfig {
-    fn init(&mut self) {
-        todo!()
-    }
-    fn read(&mut self) {
-        todo!()
-    }
-    fn prepare_structure(&mut self) {
-        todo!()
-    }
-    fn setup_paths(&mut self) {
-        todo!()
-    }
-    fn sort_lines(&mut self) {
-        todo!()
-    }
-    fn write_line_list(&mut self) {
-        todo!()
-    }
-    fn ray_trace_continuum(&mut self) {
-        todo!()
-    }
-    fn ray_trace_lines(&mut self) {
-        todo!()
-    }
-    pub fn run(&mut self) {
-        self.init();
-        self.read();
-        self.prepare_structure();
-        self.setup_paths();
-        self.sort_lines();
-        self.write_line_list();
-        self.ray_trace_continuum();
-        self.ray_trace_lines();
-    }
-}
-
 #[derive(Default)]
 pub struct Grid {
     pub r: RVector,
