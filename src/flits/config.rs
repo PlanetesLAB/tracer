@@ -1,10 +1,15 @@
 //! Global configuration for the FLiTs program.
+use std::io::BufRead;
+use std::path::PathBuf;
+use std::{fs::File, io::BufReader, path::Path as OSPath};
 
+use anyhow::Result;
 use ndarray::Array2;
 
 use crate::types::{BVector, RMatrix, RTensor, RVector, UVector};
 
 #[allow(non_snake_case)]
+#[derive(Debug)]
 pub struct FLITSConfig {
     // Stellar parameters
     /// Stellar mass (solar masses).
@@ -31,8 +36,12 @@ pub struct FLITSConfig {
     pub LTE: bool,
 
     // Files
-    pub line_file: String,
+    pub config_path: PathBuf,
+    pub config_dir: PathBuf,
+    pub line_files: Vec<String>,
     pub tracer_file: String,
+    pub flits_file_compressed: String,
+    pub flits_file: String,
 
     /// Model Structure
     pub model: Model,
@@ -65,7 +74,11 @@ impl Default for FLITSConfig {
             lmin: 5.0,
             lmax: 50.0,
             distance: 1.0,
-            line_file: String::new(),
+            config_path: PathBuf::new(),
+            config_dir: PathBuf::new(),
+            line_files: Vec::new(),
+            flits_file_compressed: String::new(),
+            flits_file: String::new(),
             maxt,
             model: Model::ProDiMo,
             npop0: UVector::default(maxt),
@@ -79,7 +92,7 @@ impl Default for FLITSConfig {
             vresolution: 1e5,
             vres_profile: 1e4,
             tau_max: 15.0,
-            accuracy: AccuracyLevel::Low,
+            accuracy: AccuracyLevel::DefaultSampling,
             LTE: false,
             cylindrical: true,
             do_blend: true,
@@ -89,7 +102,98 @@ impl Default for FLITSConfig {
     }
 }
 
-#[derive(Default)]
+impl FLITSConfig {
+    pub fn load_from_path<P: AsRef<OSPath>>(&mut self, path: P) -> Result<()> {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+
+        let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
+
+        for line in lines {
+            let (key, value) = line.split_once('=').ok_or_else(|| {
+                anyhow::anyhow!("Invalid line format, expected 'key=value': {}", line)
+            })?;
+            // Remove quotes
+            let value = value.trim_matches('\'');
+            if key == "linefile" {
+                self.line_files.push(value.to_string());
+            }
+            if key == "lmin" {
+                let value = value.split_whitespace().next().ok_or_else(|| {
+                    anyhow::anyhow!("Expected a value for lmin in line: {}", line)
+                })?;
+                self.lmin = value.parse::<f64>().expect("Failed to parse lmin");
+            }
+            if key == "lmax" {
+                let value = value.split_whitespace().next().ok_or_else(|| {
+                    anyhow::anyhow!("Expected a value for lmax in line: {}", line)
+                })?;
+                self.lmax = value.parse::<f64>().expect("Failed to parse lmax");
+            }
+            if key == "vres" {
+                let value = value.split_whitespace().next().ok_or_else(|| {
+                    anyhow::anyhow!("Expected a value for vres in line: {}", line)
+                })?;
+                self.vresolution = value.parse::<f64>().expect("Failed to parse vres");
+            }
+            if key == "vres_profile" {
+                let value = value.split_whitespace().next().ok_or_else(|| {
+                    anyhow::anyhow!("Expected a value for vres_profile in line: {}", line)
+                })?;
+                if value.contains('d') {
+                    // replace with e
+                    let new_value = value.replace('d', "e");
+                    self.vres_profile = new_value
+                        .parse::<f64>()
+                        .expect("Failed to parse vres_profile");
+                } else {
+                    self.vres_profile = value.parse::<f64>().expect("Failed to parse vres_profile");
+                }
+            }
+            if key == "LTE" {
+                if value.contains("true") || value.contains("1") {
+                    self.LTE = true;
+                } else if value.contains("false") || value.contains("0") {
+                    self.LTE = false;
+                } else {
+                    return Err(anyhow::anyhow!("Invalid value for LTE in line: {}", line));
+                }
+            }
+            if key == "inc" {
+                let value = value.trim();
+                self.grid.inc = value.parse::<f64>().expect("Failed to parse inc");
+            }
+            if key == "accuracy" {
+                let value = value.trim();
+                self.accuracy = match value {
+                    "0" => AccuracyLevel::BasicSampling,
+                    "1" => AccuracyLevel::DefaultSampling,
+                    "2" => AccuracyLevel::RadialEnhanced,
+                    "3" => AccuracyLevel::AzimuthalEnhanced,
+                    "4" => AccuracyLevel::DualEnhanced,
+                    "5" => AccuracyLevel::MaxSampling,
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "Invalid value for accuracy in line: {}",
+                            line
+                        ))
+                    }
+                };
+            }
+            if key == "flitsfile" {
+                self.flits_file_compressed = value.to_string();
+            }
+        }
+
+        if self.grid.inc < 1.0 {
+            self.grid.inc = 1.0;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Default, Debug)]
 pub struct Grid {
     pub r: RVector,
     pub theta: RMatrix,
@@ -124,7 +228,7 @@ impl Grid {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Image {
     pub nimr: usize,
     pub ngrids: usize,
@@ -134,7 +238,7 @@ pub struct Image {
     pub vmax: f64,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ImageCube {
     pub xim: RTensor,
     pub yim: RTensor,
@@ -145,7 +249,7 @@ pub struct ImageCube {
     pub imagecube: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct LineProfile {
     pub data: RVector,
     pub nz: BVector,
@@ -271,12 +375,17 @@ pub struct SimState {
     pub blend: Vec<Blend>,
 }
 
+#[derive(Debug)]
 pub enum AccuracyLevel {
-    Low,
-    Medium,
-    High,
+    BasicSampling,
+    DefaultSampling,
+    RadialEnhanced,
+    AzimuthalEnhanced,
+    DualEnhanced,
+    MaxSampling,
 }
 
+#[derive(Debug)]
 pub enum Model {
     ProDiMo,
     McMax,
