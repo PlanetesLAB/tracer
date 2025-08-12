@@ -1,4 +1,4 @@
-use crate::flits::config::Cell;
+use crate::flits::config::{Cell, PopulationLevels};
 
 use ndarray::ArrayView1;
 use ndarray::{Array1, Array2, Array3, Array4};
@@ -14,6 +14,9 @@ pub type RMatrix = Array2<f64>;
 
 /// [`crate::flits::config::Cell`] matrix
 pub type CellMatrix = Array2<Cell>;
+
+/// [`crate::flits::config::PopulationLevels`] vector
+pub type PLVector = Array1<PopulationLevels>;
 
 /// A real tensor (3-dimensional real array).
 pub type RTensor = Array3<f64>;
