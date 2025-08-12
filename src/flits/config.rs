@@ -6,7 +6,7 @@ use std::{fs::File, io::BufReader, path::Path as OSPath};
 use anyhow::Result;
 use ndarray::Array2;
 
-use crate::types::{BVector, RMatrix, RTensor, RVector, UVector};
+use crate::types::{BVector, PLVector, RMatrix, RTensor, RVector, UVector};
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
@@ -45,8 +45,6 @@ pub struct FLITSConfig {
 
     /// Model Structure
     pub model: Model,
-    // Grid setup
-    pub grid: Grid,
 
     // Image grid
     pub image: Image,
@@ -62,6 +60,9 @@ pub struct FLITSConfig {
     pub profile: LineProfile,
 
     pub npop0: UVector,
+    pub mol_name0: Vec<String>,
+
+    pub inc: f64,
 }
 
 impl Default for FLITSConfig {
@@ -82,13 +83,13 @@ impl Default for FLITSConfig {
             maxt,
             model: Model::ProDiMo,
             npop0: UVector::default(maxt),
+            mol_name0: Vec::new(),
             nv_profile: 10,
             profile: LineProfile::default(),
             rlines: 10.0,
             vres_mult: 1e5,
             tracer_file: String::new(),
             bb: RMatrix::default((nlam, maxt)),
-            grid: Grid::new(nlam),
             vresolution: 1e5,
             vres_profile: 1e4,
             tau_max: 15.0,
@@ -98,6 +99,7 @@ impl Default for FLITSConfig {
             do_blend: true,
             imcube: ImageCube::default(),
             image: Image::default(),
+            inc: 30.0,
         }
     }
 }
@@ -161,7 +163,7 @@ impl FLITSConfig {
             }
             if key == "inc" {
                 let value = value.trim();
-                self.grid.inc = value.parse::<f64>().expect("Failed to parse inc");
+                self.inc = value.parse::<f64>().expect("Failed to parse inc");
             }
             if key == "accuracy" {
                 let value = value.trim();
@@ -185,8 +187,8 @@ impl FLITSConfig {
             }
         }
 
-        if self.grid.inc < 1.0 {
-            self.grid.inc = 1.0;
+        if self.inc < 1.0 {
+            self.inc = 1.0;
         }
 
         Ok(())
@@ -212,20 +214,9 @@ pub struct Grid {
     pub nspec: usize,
     pub rin: f64,
     pub rout: f64,
-    pub inc: f64,
     pub lstar: f64,
     pub lam_cont: RVector,
     pub fstar: RVector,
-}
-
-impl Grid {
-    fn new(nlam: usize) -> Self {
-        Self {
-            nlam,
-            inc: 30.0,
-            ..Default::default()
-        }
-    }
 }
 
 #[derive(Default, Debug)]
@@ -306,8 +297,8 @@ pub struct Cell {
     pub n: RVector,
     pub n0: RVector,
     pub line_width0: RVector,
-    pub npop0: RMatrix,
-    pub npop: RMatrix,
+    pub npop0: PLVector,
+    pub npop: PLVector,
     pub npopmax: RVector,
     pub line_emis: RVector,
     pub line_abs: RVector,
@@ -320,6 +311,11 @@ pub struct Cell {
     pub kext: RVector,
     pub lrf: RVector,
     pub s: RVector,
+}
+
+#[derive(Debug, Default)]
+pub struct PopulationLevels {
+    pub n: RVector,
 }
 
 #[derive(Default)]
@@ -373,6 +369,7 @@ pub struct SimState {
     pub mol: Vec<Molecule>,
     pub line: Vec<Line>,
     pub blend: Vec<Blend>,
+    pub grid: Grid,
 }
 
 #[derive(Debug)]
