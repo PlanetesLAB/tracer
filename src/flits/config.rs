@@ -319,7 +319,7 @@ pub struct Cell {
     pub line_width0: RVector,
     pub npop0: PLVector,
     pub npop: PLVector,
-    pub npopmax: RVector,
+    pub npopmax: UVector,
     pub line_emis: RVector,
     pub line_abs: RVector,
     pub kext_l: f64,
