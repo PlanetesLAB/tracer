@@ -5,6 +5,7 @@ use std::{fs::File, io::BufReader, path::Path as OSPath};
 
 use anyhow::Result;
 use ndarray::Array2;
+use spectre::lamda::Level;
 
 use crate::types::{BVector, PLVector, RMatrix, RTensor, RVector, UVector};
 
@@ -208,7 +209,6 @@ pub struct Grid {
     pub nlam: usize,
     pub ilam1: usize,
     pub ilam2: usize,
-    pub nmol: usize,
     pub nlines: usize,
     pub nblends: usize,
     pub nspec: usize,
@@ -275,15 +275,35 @@ pub struct Blend {
     pub done: bool,
 }
 
+#[derive(Debug, Default)]
+pub struct RadTransition {
+    /// ID of the transition
+    pub id: usize,
+    /// Upper level ID
+    pub up: usize,
+    /// Lower level ID
+    pub low: usize,
+    /// Einstein A coefficient (s^-1)
+    pub einst_a: f64,
+    /// Einstein B coefficient (upper -> lower) (s^-1)
+    pub einst_b_ul: f64,
+    /// Einstein B coefficient (lower -> upper) (s^-1)
+    pub einst_b_lu: f64,
+    /// Frequency of the transition (GHz)
+    pub freq: f64,
+    /// Wavelength of the transition
+    pub lam: f64,
+    /// Energy of the transition in (K)
+    pub energy: f64,
+}
+
 #[allow(non_snake_case)]
+#[derive(Default, Debug)]
 pub struct Molecule {
-    pub energy: RVector,
-    pub g: RVector,
-    pub nlines: usize,
-    pub nlevels: usize,
-    pub mass: f64,
-    pub lines: Vec<Line>,
     pub name: String,
+    pub weight: f64,
+    pub levels: Vec<Level>,
+    pub radset: Vec<RadTransition>,
     pub LTE: bool,
 }
 
