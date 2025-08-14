@@ -2,10 +2,8 @@
 
 use crate::types::{RMatrix, RVector};
 
-use super::{
-    config::{FLITSConfig, Grid, Path},
-    utils::planck,
-};
+use super::config::{FLITSConfig, Grid, Path};
+use super::utils::planck;
 
 pub fn ray_trace_continuum(flitsc: &mut FLITSConfig, grid: &Grid) {
     let mut bb = RMatrix::zeros((grid.nlam, flitsc.maxt));

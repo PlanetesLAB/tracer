@@ -1,7 +1,8 @@
 //! Global configuration for the FLiTs program.
+use std::fs::File;
 use std::io::BufRead;
-use std::path::PathBuf;
-use std::{fs::File, io::BufReader, path::Path as OSPath};
+use std::io::BufReader;
+use std::path::{Path as OSPath, PathBuf};
 
 use anyhow::Result;
 use ndarray::Array2;

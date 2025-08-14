@@ -14,8 +14,9 @@ use ndarray::Zip;
 use spectre::lamda::LAMDAData;
 
 use crate::constants as cc;
-use crate::flits::config::{FLITSConfig, Grid, Molecule, RadTransition, SimState};
 use crate::types::{CellMatrix, PLVector, RMatrix, RTensor, RTensor4, RVector, UVector};
+
+use super::config::{FLITSConfig, Grid, Molecule, RadTransition, SimState};
 
 #[derive(Debug, Clone, Copy)]
 #[repr(i32)]
