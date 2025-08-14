@@ -10,9 +10,11 @@ use flate2::read::GzDecoder;
 use ndarray::s;
 use ndarray::ArrayD;
 use ndarray::Axis;
+use ndarray::Zip;
+use spectre::lamda::LAMDAData;
 
 use crate::constants as cc;
-use crate::flits::config::{FLITSConfig, Grid, SimState};
+use crate::flits::config::{FLITSConfig, Grid, Molecule, RadTransition, SimState};
 use crate::types::{CellMatrix, PLVector, RMatrix, RTensor, RTensor4, RVector, UVector};
 
 #[derive(Debug, Clone, Copy)]
@@ -224,11 +226,12 @@ impl CellParameter {
                 }
             }
             CellParameter::LineBroadening => {
+                let nmol = flitsc.line_files.len();
                 let naxis = 3;
                 let data = extract_data(fptr, hdu, naxis)?;
                 for i in 1..=(grid.nr - 1) {
                     for j in 2..=(grid.ntheta) {
-                        for imol in 0..grid.nmol {
+                        for imol in 0..nmol {
                             c[[i, j]].line_width0[imol] = data[[imol, i - 1, grid.ntheta - j, 0]];
                         }
                     }
@@ -262,12 +265,12 @@ impl CellParameter {
         let data = data.permuted_axes([2, 1, 0]).insert_axis(Axis(3));
 
         flitsc.npop0[imol] = nlevels;
-        println!(
-            "{}: Reading {} level populations for {}",
-            imol + 1,
-            nlevels,
-            flitsc.mol_name0[imol]
-        );
+        // println!(
+        //     "{}: Reading {} level populations for {}",
+        //     imol + 1,
+        //     nlevels,
+        //     flitsc.mol_name0[imol]
+        // );
 
         for i in 0..grid.nr {
             for j in 0..grid.ntheta {
@@ -304,7 +307,7 @@ const CELL_PARAMS_ORDER: &[CellParameter] = &[
     CellParameter::RelativeLevelPopulations,
 ];
 
-pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<()> {
+pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<SimState> {
     flitsc.flits_file = flitsc
         .flits_file_compressed
         .strip_suffix(".gz")
@@ -360,18 +363,21 @@ pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<()> {
     grid.r[0] = flitsc.r_star * cc::SOLAR_RADIUS_CGS;
 
     grid.r
-        .slice_mut(s![1..=(grid.nr - 1)])
+        .slice_mut(s![1..grid.nr])
         .assign(&array.slice(s![.., 0, 0, 0]));
 
     grid.r[grid.nr] = array[[grid.nr - 2, 0, 0, 0]];
 
-    for i in 1..=(grid.nr - 1) {
-        grid.r_av[i] = (grid.r[i] + grid.r[i + 1]).sqrt();
-    }
+    Zip::from(grid.r_av.slice_mut(s![1..grid.nr]))
+        .and(grid.r.slice(s![1..grid.nr]))
+        .and(grid.r.slice(s![2..=grid.nr]))
+        .for_each(|r_av_elem, &r_curr, &r_next| {
+            *r_av_elem = (r_curr + r_next).sqrt();
+        });
 
     let mut theta_max = 0.0;
 
-    for i in 1..=(grid.nr - 1) {
+    for i in 1..grid.nr {
         grid.theta[[i, 0]] = 1.0;
         for j in 2..grid.ntheta {
             grid.theta[[i, j]] = array[[i - 1, grid.ntheta - j, 3, 0]]
@@ -396,17 +402,14 @@ pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<()> {
         }
     }
 
-    let arr_theta = 0.9 * theta_max + 0.1 * &grid.theta.slice(s![1..=(grid.nr - 1), 0]);
-    grid.theta
-        .slice_mut(s![1..=(grid.nr - 1), 1])
-        .assign(&arr_theta);
+    let arr_theta = 0.9 * theta_max + 0.1 * &grid.theta.slice(s![1..grid.nr, 0]);
+    grid.theta.slice_mut(s![1..grid.nr, 1]).assign(&arr_theta);
 
-    let arr_theta_av = ((&grid.theta.slice(s![1..=(grid.nr - 1), 1])
-        + &grid.theta.slice(s![1..=(grid.nr - 1), 2]))
-        / 2.0)
-        .mapv(f64::acos);
+    let arr_theta_av =
+        ((&grid.theta.slice(s![1..grid.nr, 1]) + &grid.theta.slice(s![1..grid.nr, 2])) / 2.0)
+            .mapv(f64::acos);
     grid.theta_av
-        .slice_mut(s![1..=(grid.nr - 1), 1])
+        .slice_mut(s![1..grid.nr, 1])
         .assign(&arr_theta_av);
 
     let theta_1 = grid.theta.slice(s![1, 0..=(grid.ntheta + 1)]).to_owned();
@@ -550,7 +553,7 @@ pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<()> {
         c[[i, 0]].dens = 1e-60;
     }
 
-    Ok(())
+    Ok(sim_state)
 }
 
 fn extract_data(fptr: &mut FitsFile, hdu: FitsHdu, naxis: usize) -> Result<RTensor4> {
@@ -592,4 +595,56 @@ fn uncompress_fits_file(flitsc: &mut FLITSConfig) -> Result<()> {
     io::copy(&mut decoder, &mut writer)?;
 
     Ok(())
+}
+
+pub fn read_lamda_files(flitsc: &FLITSConfig) -> Result<Vec<Molecule>> {
+    let mut mol = Vec::with_capacity(flitsc.line_files.len());
+    let two_h_over_c2 = 2.0 * cc::PLANCK_CGS / cc::SPEED_OF_LIGHT_CGS.powi(2);
+
+    for line_file in &flitsc.line_files {
+        let data = LAMDAData::from_path(flitsc.config_dir.join(line_file))?;
+        println!("Reading line file for {}", data.name);
+        let mut molecule = Molecule {
+            name: data.name,
+            weight: data.weight,
+            LTE: flitsc.LTE,
+            ..Default::default()
+        };
+
+        molecule.levels = data
+            .levels
+            .into_iter()
+            .map(|mut level| {
+                level.energy *= 11600.0 / 8065.54; // Convert energy from cm^-1 to K
+                level
+            })
+            .collect();
+
+        molecule.radset = data
+            .radset
+            .into_iter()
+            .map(|rad| {
+                let ilow = rad.low - 1; // zero-based index
+                let iup = rad.up - 1;
+                let freq = rad.freq * 1e9; // GHz → Hz
+                let bul = rad.einst_a / (two_h_over_c2 * freq.powi(3));
+                let blu = bul * molecule.levels[iup].weight / molecule.levels[ilow].weight;
+
+                RadTransition {
+                    id: rad.id,
+                    up: rad.up,
+                    low: rad.low,
+                    einst_a: rad.einst_a,
+                    einst_b_ul: bul,
+                    einst_b_lu: blu,
+                    freq,
+                    lam: cc::SPEED_OF_LIGHT_CGS * 1e4 / freq,
+                    energy: rad.energy,
+                }
+            })
+            .collect();
+
+        mol.push(molecule);
+    }
+    Ok(mol)
 }
