@@ -273,8 +273,8 @@ impl CellParameter {
         //     flitsc.mol_name0[imol]
         // );
 
-        for i in 0..grid.nr {
-            for j in 0..grid.ntheta {
+        for i in 0..=grid.nr {
+            for j in 0..=grid.ntheta {
                 c[[i, j]].npop0[imol].n = RVector::zeros(nlevels);
             }
         }
