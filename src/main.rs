@@ -4,7 +4,8 @@ use std::path::Path;
 use anyhow::Result;
 
 use tracer::flits::config::FLITSConfig;
-use tracer::flits::io::read_fits;
+use tracer::flits::io::{read_fits, read_lamda_files};
+use tracer::flits::structure::prepare_structure;
 
 fn main() -> Result<()> {
     let mut args = env::args().skip(1); // skip program name
@@ -45,6 +46,9 @@ fn run_flits<P: AsRef<Path>>(fname: P) -> Result<()> {
         .to_path_buf();
 
     flitsc.load_from_path(fname)?;
-    read_fits(&mut flitsc)?;
+    let mut sim_state = read_fits(&mut flitsc)?;
+    sim_state.mol = read_lamda_files(&flitsc)?;
+    prepare_structure(&mut sim_state, &flitsc);
+
     Ok(())
 }
