@@ -18,3 +18,5 @@ target/
 
 # Mac
 .DS_Store
+
+output/
