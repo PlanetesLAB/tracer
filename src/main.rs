@@ -5,6 +5,7 @@ use anyhow::Result;
 
 use tracer::flits::config::FLITSConfig;
 use tracer::flits::io::{read_fits, read_lamda_files};
+use tracer::flits::paths::setup_paths;
 use tracer::flits::structure::prepare_structure;
 
 fn main() -> Result<()> {
@@ -49,6 +50,7 @@ fn run_flits<P: AsRef<Path>>(fname: P) -> Result<()> {
     let mut sim_state = read_fits(&mut flitsc)?;
     sim_state.mol = read_lamda_files(&flitsc)?;
     prepare_structure(&mut sim_state, &flitsc);
+    setup_paths(&mut sim_state, &flitsc);
 
     Ok(())
 }
