@@ -1,16 +1,24 @@
-use ndarray::{ArrayBase, Data, Dimension};
 use std::cmp::PartialOrd;
 
-pub trait ArrayExtrema<T> {
+use ndarray::{ArrayBase, Axis, OwnedRepr};
+use ndarray::{Data, Dimension, RemoveAxis};
+
+pub trait ArrayExtrema<T, D>
+where
+    D: Dimension,
+{
     fn maxval(&self) -> Option<T>;
     fn minval(&self) -> Option<T>;
+
+    fn maxval_along(&self, axis: Axis) -> Option<ArrayBase<OwnedRepr<T>, D::Smaller>>;
+    fn minval_along(&self, axis: Axis) -> Option<ArrayBase<OwnedRepr<T>, D::Smaller>>;
 }
 
-impl<T, S, D> ArrayExtrema<T> for ArrayBase<S, D>
+impl<T, S, D> ArrayExtrema<T, D> for ArrayBase<S, D>
 where
     T: PartialOrd + Copy,
     S: Data<Elem = T>,
-    D: Dimension,
+    D: Dimension + RemoveAxis,
 {
     fn maxval(&self) -> Option<T> {
         self.iter()
@@ -22,6 +30,34 @@ where
         self.iter()
             .copied()
             .reduce(|a, b| if a < b { a } else { b })
+    }
+
+    fn maxval_along(&self, axis: Axis) -> Option<ArrayBase<OwnedRepr<T>, D::Smaller>> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.map_axis(axis, |subview| {
+                subview
+                    .iter()
+                    .copied()
+                    .reduce(|a, b| if a > b { a } else { b })
+                    .unwrap()
+            }))
+        }
+    }
+
+    fn minval_along(&self, axis: Axis) -> Option<ArrayBase<OwnedRepr<T>, D::Smaller>> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.map_axis(axis, |subview| {
+                subview
+                    .iter()
+                    .copied()
+                    .reduce(|a, b| if a < b { a } else { b })
+                    .unwrap()
+            }))
+        }
     }
 }
 
