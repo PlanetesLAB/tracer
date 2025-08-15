@@ -395,6 +395,7 @@ pub struct SimState {
 
 #[derive(Debug)]
 pub enum AccuracyLevel {
+    MinSampling,
     BasicSampling,
     DefaultSampling,
     RadialEnhanced,
