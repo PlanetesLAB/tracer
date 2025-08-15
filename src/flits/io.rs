@@ -1,6 +1,6 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io;
-
+use std::io::Write;
 use std::io::{BufReader, BufWriter};
 
 use anyhow::{bail, Result};
@@ -648,4 +648,20 @@ pub fn read_lamda_files(flitsc: &FLITSConfig) -> Result<Vec<Molecule>> {
         mol.push(molecule);
     }
     Ok(mol)
+}
+
+pub fn write_image_grid(imr: Vec<f64>, r_sph_val: f64) -> Result<()> {
+    fs::create_dir_all("output")?;
+
+    let file = File::create("output/imagegrid.out")?;
+    let mut writer = BufWriter::new(file);
+
+    writeln!(writer, "{}", r_sph_val / cc::AU_CGS)?;
+    writeln!(writer)?; // empty line
+
+    for val in imr.iter() {
+        writeln!(writer, "{}", val / cc::AU_CGS)?;
+    }
+
+    Ok(())
 }
