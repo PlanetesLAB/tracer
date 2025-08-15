@@ -10,11 +10,10 @@ use flate2::read::GzDecoder;
 use ndarray::s;
 use ndarray::ArrayD;
 use ndarray::Axis;
-use ndarray::Zip;
 use spectre::lamda::LAMDAData;
 
 use crate::constants as cc;
-use crate::types::{CellMatrix, PLVector, RMatrix, RTensor, RTensor4, RVector, UVector};
+use crate::types::{CellMatrix, RMatrix, RTensor, RTensor4, RVector, UVector};
 
 use super::config::{FLITSConfig, Grid, Molecule, RadTransition, SimState};
 
@@ -38,10 +37,11 @@ pub enum CellParameter {
 impl CellParameter {
     fn read_next(
         &self,
+        c: &mut CellMatrix,
         hdu: FitsHdu,
         fptr: &mut FitsFile,
+        grid: &mut Grid,
         flitsc: &mut FLITSConfig,
-        sim_state: &mut SimState,
     ) -> Result<()> {
         match self {
             CellParameter::GasTemperature
@@ -55,17 +55,17 @@ impl CellParameter {
             | CellParameter::SourceFunction
             | CellParameter::MolecularParticleDensities
             | CellParameter::LineBroadening => {
-                Self::read_hdu_generic(self, hdu, fptr, flitsc, sim_state)?;
+                Self::read_hdu_generic(self, hdu, fptr, c, grid, flitsc)?;
             }
 
             CellParameter::RelativeLevelPopulations => {
-                let nspec = sim_state.grid.nspec;
+                let nspec = grid.nspec;
                 flitsc.npop0 = UVector::zeros(nspec);
                 flitsc.mol_name0 = Vec::new();
                 for imol in 0..nspec {
                     match fptr.iter().nth(13 + imol) {
                         Some(hdu) => {
-                            Self::read_hdu_level_populations(imol, hdu, fptr, flitsc, sim_state)?;
+                            Self::read_hdu_level_populations(imol, hdu, fptr, c, grid, flitsc)?;
                         }
                         None => return Ok(()), // No more HDUs
                     }
@@ -80,12 +80,10 @@ impl CellParameter {
         kind: &CellParameter,
         hdu: FitsHdu,
         fptr: &mut FitsFile,
+        c: &mut CellMatrix,
+        grid: &mut Grid,
         flitsc: &mut FLITSConfig,
-        sim_state: &mut SimState,
     ) -> Result<()> {
-        let grid = &mut sim_state.grid;
-        let c = &mut sim_state.c;
-
         match kind {
             CellParameter::GasTemperature => {
                 let naxis = 2;
@@ -250,12 +248,10 @@ impl CellParameter {
         imol: usize,
         hdu: FitsHdu,
         fptr: &mut FitsFile,
+        c: &mut CellMatrix,
+        grid: &Grid,
         flitsc: &mut FLITSConfig,
-        sim_state: &mut SimState,
     ) -> Result<()> {
-        let grid = &mut sim_state.grid;
-        let c = &mut sim_state.c;
-
         let nlevels = hdu.read_key::<f64>(fptr, "NLEV")? as usize;
         flitsc
             .mol_name0
@@ -266,12 +262,6 @@ impl CellParameter {
         let data = data.permuted_axes([2, 1, 0]).insert_axis(Axis(3));
 
         flitsc.npop0[imol] = nlevels;
-        // println!(
-        //     "{}: Reading {} level populations for {}",
-        //     imol + 1,
-        //     nlevels,
-        //     flitsc.mol_name0[imol]
-        // );
 
         for i in 0..=grid.nr {
             for j in 0..=grid.ntheta {
@@ -321,190 +311,110 @@ pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<SimState> {
         uncompress_fits_file(flitsc)?;
     }
 
-    let mut sim_state = SimState::default();
-
     let mut fptr = FitsFile::open(&fits_path)?;
 
-    // Check dimensions
-    let hdu = fptr.primary_hdu()?;
+    let mut grid = read_grid(&mut fptr, flitsc)?;
+    let c = read_cell_parameters(&mut fptr, flitsc, &mut grid)?;
 
-    sim_state.grid = Grid {
-        rin: hdu.read_key::<f64>(&mut fptr, "Rin")?,
-        rout: hdu.read_key::<f64>(&mut fptr, "Rout")?,
-        nr: hdu.read_key::<f64>(&mut fptr, "NXX")? as usize + 1,
-        ntheta: hdu.read_key::<f64>(&mut fptr, "NZZ")? as usize + 1,
-        nspec: hdu.read_key::<f64>(&mut fptr, "NSPEC")? as usize,
+    let sim_state = SimState {
+        grid,
+        c,
         ..Default::default()
     };
 
-    let grid = &mut sim_state.grid;
+    Ok(sim_state)
+}
 
-    flitsc.m_star = hdu.read_key::<f64>(&mut fptr, "Mstar")?;
-    flitsc.r_star = hdu.read_key::<f64>(&mut fptr, "Rstar")?;
-    flitsc.distance = hdu.read_key::<f64>(&mut fptr, "distance")?;
+fn extract_data(fptr: &mut FitsFile, hdu: FitsHdu, naxis: usize) -> Result<RTensor4> {
+    let data: ArrayD<f64> = hdu.read_image(fptr)?;
+    match naxis {
+        1 => {
+            let data1: RVector = data.into_dimensionality()?;
+            Ok(data1
+                .insert_axis(Axis(1))
+                .insert_axis(Axis(2))
+                .insert_axis(Axis(3)))
+        }
+        2 => {
+            let data2: RMatrix = data.into_dimensionality()?;
+            let data_permuted = data2.permuted_axes([1, 0]);
+            Ok(data_permuted.insert_axis(Axis(2)).insert_axis(Axis(3)))
+        }
+        3 | 4 => {
+            let data3: RTensor = data.into_dimensionality()?;
+            let data_permuted = data3.permuted_axes([2, 1, 0]);
+            Ok(data_permuted.insert_axis(Axis(3)))
+        }
+        _ => Err(anyhow::anyhow!("Unsupported number of axes: {}", naxis)),
+    }
+}
 
-    grid.r = RVector::zeros(grid.nr + 2);
-    grid.theta = RMatrix::default(((grid.nr + 1), (grid.ntheta + 2)));
+fn uncompress_fits_file(flitsc: &mut FLITSConfig) -> Result<()> {
+    let gz_path = flitsc.config_dir.join(&flitsc.flits_file_compressed);
+    let gz = File::open(&gz_path)?;
+    let buffered = BufReader::new(gz);
+    let mut decoder = GzDecoder::new(buffered);
 
-    grid.r_av = RVector::zeros(grid.nr + 1);
-    grid.theta_av = RMatrix::zeros(((grid.nr + 1), (grid.ntheta + 1)));
+    // Create output path in same directory as config_dir
+    let output_path = flitsc.config_dir.join(&flitsc.flits_file);
+
+    let output_file = File::create(&output_path)?;
+    let mut writer = BufWriter::new(output_file);
+
+    io::copy(&mut decoder, &mut writer)?;
+
+    Ok(())
+}
+
+fn read_grid(fptr: &mut FitsFile, flitsc: &mut FLITSConfig) -> Result<Grid> {
+    let hdu = fptr.primary_hdu()?;
+
+    let mut grid = Grid::from_hdu(fptr, &hdu)?;
+
+    flitsc.m_star = hdu.read_key::<f64>(fptr, "Mstar")?;
+    flitsc.r_star = hdu.read_key::<f64>(fptr, "Rstar")?;
+    flitsc.distance = hdu.read_key::<f64>(fptr, "distance")?;
 
     // Axis(0) --> r
     // Axis(1) --> theta
     // Axis(2) --> ???
-    let data: ArrayD<f64> = hdu.read_image(&mut fptr)?;
+    let data: ArrayD<f64> = hdu.read_image(fptr)?;
     let data3: RTensor = data.into_dimensionality()?;
     let array = data3.permuted_axes([2, 1, 0]).insert_axis(Axis(3));
 
-    grid.rin = array[[0, 0, 0, 0]] / cc::AU_CGS;
-    println!("Adjusting Rin to:  {}", grid.rin);
-    grid.rout = array[[grid.nr - 2, 0, 1, 0]] / cc::AU_CGS;
-    println!("Adjusting Rout to: {}", grid.rout);
+    grid.initialize(array, flitsc);
 
-    grid.r[0] = flitsc.r_star * cc::SOLAR_RADIUS_CGS;
+    Ok(grid)
+}
 
-    grid.r
-        .slice_mut(s![1..grid.nr])
-        .assign(&array.slice(s![.., 0, 0, 0]));
-
-    grid.r[grid.nr] = array[[grid.nr - 2, 0, 1, 0]];
-
-    Zip::from(grid.r_av.slice_mut(s![1..grid.nr]))
-        .and(grid.r.slice(s![1..grid.nr]))
-        .and(grid.r.slice(s![2..=grid.nr]))
-        .for_each(|r_av_elem, &r_curr, &r_next| {
-            *r_av_elem = (r_curr * r_next).sqrt();
-        });
-
-    let mut theta_max = 0.0;
-
-    for i in 1..grid.nr {
-        grid.theta[[i, 0]] = 1.0;
-        for j in 2..=grid.ntheta {
-            grid.theta[[i, j]] = array[[i - 1, grid.ntheta - j, 3, 0]]
-                / (grid.r_av[i].powi(2) + array[[i - 1, grid.ntheta - j, 3, 0]].powi(2)).sqrt()
-        }
-        grid.theta[[i, grid.ntheta + 1]] = 0.0;
-        grid.theta[[i, 1]] = (grid.theta[[i, 0]] + grid.theta[[i, 2]]) / 2.0;
-
-        if flitsc.cylindrical {
-            grid.theta_av[[i, 1]] = grid.theta[[i, 1]].acos() / 2.0;
-        } else {
-            grid.theta[[i, 1]] = 1.0;
-            grid.theta_av[[i, 0]] = 0.0;
-        }
-
-        for j in 1..=(grid.ntheta) {
-            grid.theta_av[[i, j]] = ((grid.theta[[i, j]] + grid.theta[[i, j + 1]]) / 2.0).acos()
-        }
-
-        if grid.theta[[i, 2]] > theta_max {
-            theta_max = grid.theta[[i, 2]];
-        }
-    }
-
-    let arr_theta = 0.9 * theta_max + 0.1 * &grid.theta.slice(s![1..grid.nr, 0]);
-    grid.theta.slice_mut(s![1..grid.nr, 1]).assign(&arr_theta);
-
-    let arr_theta_av =
-        ((&grid.theta.slice(s![1..grid.nr, 1]) + &grid.theta.slice(s![1..grid.nr, 2])) / 2.0)
-            .mapv(f64::acos);
-    grid.theta_av
-        .slice_mut(s![1..grid.nr, 1])
-        .assign(&arr_theta_av);
-
-    let theta_1 = grid.theta.slice(s![1, 0..=(grid.ntheta + 1)]).to_owned();
-    grid.theta
-        .slice_mut(s![0, 0..=(grid.ntheta + 1)])
-        .assign(&theta_1);
-
-    let theta_av_1 = grid.theta_av.slice(s![1, 0..=grid.ntheta]).to_owned();
-    grid.theta_av
-        .slice_mut(s![0, 0..=grid.ntheta])
-        .assign(&theta_av_1);
-
-    let theta_nr_1 = grid
-        .theta
-        .slice(s![grid.nr - 1, 0..=(grid.ntheta + 1)])
-        .to_owned();
-    grid.theta
-        .slice_mut(s![grid.nr, 0..=(grid.ntheta + 1)])
-        .assign(&theta_nr_1);
-
-    let theta_av_nr_1 = grid
-        .theta_av
-        .slice(s![grid.nr - 1, 0..=grid.ntheta])
-        .to_owned();
-    grid.theta_av
-        .slice_mut(s![grid.nr, 0..=grid.ntheta])
-        .assign(&theta_av_nr_1);
-
-    if flitsc.cylindrical {
-        grid.rout *= 1.0001 / grid.theta[[grid.nr, 1]].acos().sin();
-    } else {
-        grid.rout *= 1.0001;
-    }
-
-    grid.r[grid.nr + 1] = grid.rout * cc::AU_CGS;
-
-    grid.r_av[grid.nr - 1] = (grid.r[grid.nr - 1] * grid.r[grid.nr]).sqrt();
-    grid.r_av[grid.nr] = (grid.r[grid.nr] * grid.r[grid.nr + 1]).sqrt();
-
-    grid.r
-        .slice_mut(s![1..=(grid.nr + 1)])
-        .as_slice_mut()
-        .unwrap()
-        .sort_by(|a, b| a.total_cmp(b));
-
-    grid.r_sph = RVector::zeros(grid.nr + 2);
-    grid.r_av_sph = RVector::zeros(grid.nr + 2);
-
-    if flitsc.cylindrical {
-        let r_sph_rhs = &grid.r.slice(s![0..=grid.nr])
-            / (grid.theta.slice(s![0..=grid.nr, 1]).mapv(f64::acos)).sin();
-        grid.r_sph.slice_mut(s![0..=grid.nr]).assign(&r_sph_rhs);
-
-        let r_av_sph_rhs = &grid.r_av.slice(s![0..=grid.nr])
-            / (grid.theta.slice(s![0..=grid.nr, 1]).mapv(f64::acos)).sin();
-        grid.r_av_sph
-            .slice_mut(s![0..=grid.nr])
-            .assign(&r_av_sph_rhs);
-
-        grid.r_sph[grid.nr + 1] = grid.r[grid.nr + 1];
-        grid.r_av_sph[grid.nr] = (grid.r_sph[grid.nr] * grid.r_sph[grid.nr + 1]).sqrt();
-    } else {
-        let r_sph_rhs = grid.r.slice(s![0..=grid.nr]);
-        grid.r_sph.slice_mut(s![0..=grid.nr]).assign(&r_sph_rhs);
-
-        let r_av_sph_rhs = grid.r_av.slice(s![0..=grid.nr]);
-        grid.r_av_sph
-            .slice_mut(s![0..=grid.nr])
-            .assign(&r_av_sph_rhs);
-
-        grid.r_sph[grid.nr + 1] = grid.r[grid.nr + 1];
-    }
-
-    sim_state.c = CellMatrix::default(((grid.nr + 1), (grid.ntheta + 1)));
+fn read_cell_parameters(
+    fptr: &mut FitsFile,
+    flitsc: &mut FLITSConfig,
+    grid: &mut Grid,
+) -> Result<CellMatrix> {
+    let mut c = CellMatrix::default(((grid.nr + 1), (grid.ntheta + 1)));
 
     for i in 0..=grid.nr {
         for j in 0..=grid.ntheta {
-            sim_state.c[[i, j]].npop0 = PLVector::default(grid.nspec);
-            sim_state.c[[i, j]].n0 = RVector::default(grid.nspec);
-            sim_state.c[[i, j]].line_width0 = RVector::default(grid.nspec);
+            c[[i, j]].allocate(grid.nspec);
         }
     }
 
+    // Process rest of HDUs
     for param in CELL_PARAMS_ORDER.iter() {
         let hdu = fptr
             .iter()
             .nth(*param as usize)
             .ok_or_else(|| anyhow::anyhow!("No HDUs found in FITS file"))?;
-        param.read_next(hdu, &mut fptr, flitsc, &mut sim_state)?;
+        param.read_next(&mut c, hdu, fptr, grid, flitsc)?;
     }
 
-    let c = &mut sim_state.c;
-    let grid = &sim_state.grid;
+    set_boundary_conditions(&mut c, grid, flitsc);
 
+    Ok(c)
+}
+
+fn set_boundary_conditions(c: &mut CellMatrix, grid: &Grid, flitsc: &FLITSConfig) {
     for i in 1..grid.nr {
         for j in 1..=grid.ntheta {
             let xx = grid.r_av[i];
@@ -553,49 +463,6 @@ pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<SimState> {
                 .sqrt();
         c[[i, 0]].dens = 1e-60;
     }
-
-    Ok(sim_state)
-}
-
-fn extract_data(fptr: &mut FitsFile, hdu: FitsHdu, naxis: usize) -> Result<RTensor4> {
-    let data: ArrayD<f64> = hdu.read_image(fptr)?;
-    match naxis {
-        1 => {
-            let data1: RVector = data.into_dimensionality()?;
-            Ok(data1
-                .insert_axis(Axis(1))
-                .insert_axis(Axis(2))
-                .insert_axis(Axis(3)))
-        }
-        2 => {
-            let data2: RMatrix = data.into_dimensionality()?;
-            let data_permuted = data2.permuted_axes([1, 0]);
-            Ok(data_permuted.insert_axis(Axis(2)).insert_axis(Axis(3)))
-        }
-        3 | 4 => {
-            let data3: RTensor = data.into_dimensionality()?;
-            let data_permuted = data3.permuted_axes([2, 1, 0]);
-            Ok(data_permuted.insert_axis(Axis(3)))
-        }
-        _ => Err(anyhow::anyhow!("Unsupported number of axes: {}", naxis)),
-    }
-}
-
-fn uncompress_fits_file(flitsc: &mut FLITSConfig) -> Result<()> {
-    let gz_path = flitsc.config_dir.join(&flitsc.flits_file_compressed);
-    let gz = File::open(&gz_path)?;
-    let buffered = BufReader::new(gz);
-    let mut decoder = GzDecoder::new(buffered);
-
-    // Create output path in same directory as config_dir
-    let output_path = flitsc.config_dir.join(&flitsc.flits_file);
-
-    let output_file = File::create(&output_path)?;
-    let mut writer = BufWriter::new(output_file);
-
-    io::copy(&mut decoder, &mut writer)?;
-
-    Ok(())
 }
 
 pub fn read_lamda_files(flitsc: &FLITSConfig) -> Result<Vec<Molecule>> {

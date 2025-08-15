@@ -5,9 +5,15 @@ use std::io::BufReader;
 use std::path::{Path as OSPath, PathBuf};
 
 use anyhow::Result;
+use fitsio::hdu::FitsHdu;
+use fitsio::FitsFile;
+use ndarray::s;
 use ndarray::Array2;
+use ndarray::Zip;
 use spectre::lamda::Level;
 
+use crate::constants as cc;
+use crate::types::RTensor4;
 use crate::types::{BVector, PLVector, RMatrix, RTensor, RVector, UVector};
 
 #[allow(non_snake_case)]
@@ -220,6 +226,159 @@ pub struct Grid {
     pub fstar: RVector,
 }
 
+impl Grid {
+    pub fn from_hdu(fptr: &mut FitsFile, hdu: &FitsHdu) -> Result<Self> {
+        Ok(Self {
+            rin: hdu.read_key::<f64>(fptr, "Rin")?,
+            rout: hdu.read_key::<f64>(fptr, "Rout")?,
+            nr: hdu.read_key::<f64>(fptr, "NXX")? as usize + 1,
+            ntheta: hdu.read_key::<f64>(fptr, "NZZ")? as usize + 1,
+            nspec: hdu.read_key::<f64>(fptr, "NSPEC")? as usize,
+            ..Default::default()
+        })
+    }
+
+    fn allocate(&mut self) {
+        self.r = RVector::zeros(self.nr + 2);
+        self.theta = RMatrix::default(((self.nr + 1), (self.ntheta + 2)));
+
+        self.r_av = RVector::zeros(self.nr + 1);
+        self.theta_av = RMatrix::zeros(((self.nr + 1), (self.ntheta + 1)));
+    }
+
+    pub fn initialize(&mut self, data: RTensor4, flitsc: &FLITSConfig) {
+        self.allocate();
+
+        self.rin = data[[0, 0, 0, 0]] / cc::AU_CGS;
+        println!("Adjusting Rin to:  {}", self.rin);
+        self.rout = data[[self.nr - 2, 0, 1, 0]] / cc::AU_CGS;
+        println!("Adjusting Rout to: {}", self.rout);
+
+        self.r[0] = flitsc.r_star * cc::SOLAR_RADIUS_CGS;
+
+        self.r
+            .slice_mut(s![1..self.nr])
+            .assign(&data.slice(s![.., 0, 0, 0]));
+
+        self.r[self.nr] = data[[self.nr - 2, 0, 1, 0]];
+
+        Zip::from(self.r_av.slice_mut(s![1..self.nr]))
+            .and(self.r.slice(s![1..self.nr]))
+            .and(self.r.slice(s![2..=self.nr]))
+            .for_each(|r_av_elem, &r_curr, &r_next| {
+                *r_av_elem = (r_curr * r_next).sqrt();
+            });
+
+        let mut theta_max = 0.0;
+
+        for i in 1..self.nr {
+            self.theta[[i, 0]] = 1.0;
+            for j in 2..=self.ntheta {
+                self.theta[[i, j]] = data[[i - 1, self.ntheta - j, 3, 0]]
+                    / (self.r_av[i].powi(2) + data[[i - 1, self.ntheta - j, 3, 0]].powi(2)).sqrt()
+            }
+            self.theta[[i, self.ntheta + 1]] = 0.0;
+            self.theta[[i, 1]] = (self.theta[[i, 0]] + self.theta[[i, 2]]) / 2.0;
+
+            if flitsc.cylindrical {
+                self.theta_av[[i, 1]] = self.theta[[i, 1]].acos() / 2.0;
+            } else {
+                self.theta[[i, 1]] = 1.0;
+                self.theta_av[[i, 0]] = 0.0;
+            }
+
+            for j in 1..=(self.ntheta) {
+                self.theta_av[[i, j]] = ((self.theta[[i, j]] + self.theta[[i, j + 1]]) / 2.0).acos()
+            }
+
+            if self.theta[[i, 2]] > theta_max {
+                theta_max = self.theta[[i, 2]];
+            }
+        }
+
+        let arr_theta = 0.9 * theta_max + 0.1 * &self.theta.slice(s![1..self.nr, 0]);
+        self.theta.slice_mut(s![1..self.nr, 1]).assign(&arr_theta);
+
+        let arr_theta_av =
+            ((&self.theta.slice(s![1..self.nr, 1]) + &self.theta.slice(s![1..self.nr, 2])) / 2.0)
+                .mapv(f64::acos);
+        self.theta_av
+            .slice_mut(s![1..self.nr, 1])
+            .assign(&arr_theta_av);
+
+        let theta_1 = self.theta.slice(s![1, 0..=(self.ntheta + 1)]).to_owned();
+        self.theta
+            .slice_mut(s![0, 0..=(self.ntheta + 1)])
+            .assign(&theta_1);
+
+        let theta_av_1 = self.theta_av.slice(s![1, 0..=self.ntheta]).to_owned();
+        self.theta_av
+            .slice_mut(s![0, 0..=self.ntheta])
+            .assign(&theta_av_1);
+
+        let theta_nr_1 = self
+            .theta
+            .slice(s![self.nr - 1, 0..=(self.ntheta + 1)])
+            .to_owned();
+        self.theta
+            .slice_mut(s![self.nr, 0..=(self.ntheta + 1)])
+            .assign(&theta_nr_1);
+
+        let theta_av_nr_1 = self
+            .theta_av
+            .slice(s![self.nr - 1, 0..=self.ntheta])
+            .to_owned();
+        self.theta_av
+            .slice_mut(s![self.nr, 0..=self.ntheta])
+            .assign(&theta_av_nr_1);
+
+        if flitsc.cylindrical {
+            self.rout *= 1.0001 / self.theta[[self.nr, 1]].acos().sin();
+        } else {
+            self.rout *= 1.0001;
+        }
+
+        self.r[self.nr + 1] = self.rout * cc::AU_CGS;
+
+        self.r_av[self.nr - 1] = (self.r[self.nr - 1] * self.r[self.nr]).sqrt();
+        self.r_av[self.nr] = (self.r[self.nr] * self.r[self.nr + 1]).sqrt();
+
+        self.r
+            .slice_mut(s![1..=(self.nr + 1)])
+            .as_slice_mut()
+            .unwrap()
+            .sort_by(|a, b| a.total_cmp(b));
+
+        self.r_sph = RVector::zeros(self.nr + 2);
+        self.r_av_sph = RVector::zeros(self.nr + 2);
+
+        if flitsc.cylindrical {
+            let r_sph_rhs = &self.r.slice(s![0..=self.nr])
+                / (self.theta.slice(s![0..=self.nr, 1]).mapv(f64::acos)).sin();
+            self.r_sph.slice_mut(s![0..=self.nr]).assign(&r_sph_rhs);
+
+            let r_av_sph_rhs = &self.r_av.slice(s![0..=self.nr])
+                / (self.theta.slice(s![0..=self.nr, 1]).mapv(f64::acos)).sin();
+            self.r_av_sph
+                .slice_mut(s![0..=self.nr])
+                .assign(&r_av_sph_rhs);
+
+            self.r_sph[self.nr + 1] = self.r[self.nr + 1];
+            self.r_av_sph[self.nr] = (self.r_sph[self.nr] * self.r_sph[self.nr + 1]).sqrt();
+        } else {
+            let r_sph_rhs = self.r.slice(s![0..=self.nr]);
+            self.r_sph.slice_mut(s![0..=self.nr]).assign(&r_sph_rhs);
+
+            let r_av_sph_rhs = self.r_av.slice(s![0..=self.nr]);
+            self.r_av_sph
+                .slice_mut(s![0..=self.nr])
+                .assign(&r_av_sph_rhs);
+
+            self.r_sph[self.nr + 1] = self.r[self.nr + 1];
+        }
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct Image {
     pub nimr: usize,
@@ -332,6 +491,14 @@ pub struct Cell {
     pub kext: RVector,
     pub lrf: RVector,
     pub s: RVector,
+}
+
+impl Cell {
+    pub fn allocate(&mut self, nspec: usize) {
+        self.npop0 = PLVector::default(nspec);
+        self.n0 = RVector::default(nspec);
+        self.line_width0 = RVector::default(nspec);
+    }
 }
 
 #[derive(Debug, Default)]
