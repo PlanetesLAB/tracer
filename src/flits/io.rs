@@ -367,30 +367,30 @@ pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<SimState> {
         .slice_mut(s![1..grid.nr])
         .assign(&array.slice(s![.., 0, 0, 0]));
 
-    grid.r[grid.nr] = array[[grid.nr - 2, 0, 0, 0]];
+    grid.r[grid.nr] = array[[grid.nr - 2, 0, 1, 0]];
 
     Zip::from(grid.r_av.slice_mut(s![1..grid.nr]))
         .and(grid.r.slice(s![1..grid.nr]))
         .and(grid.r.slice(s![2..=grid.nr]))
         .for_each(|r_av_elem, &r_curr, &r_next| {
-            *r_av_elem = (r_curr + r_next).sqrt();
+            *r_av_elem = (r_curr * r_next).sqrt();
         });
 
     let mut theta_max = 0.0;
 
     for i in 1..grid.nr {
         grid.theta[[i, 0]] = 1.0;
-        for j in 2..grid.ntheta {
+        for j in 2..=grid.ntheta {
             grid.theta[[i, j]] = array[[i - 1, grid.ntheta - j, 3, 0]]
                 / (grid.r_av[i].powi(2) + array[[i - 1, grid.ntheta - j, 3, 0]].powi(2)).sqrt()
         }
         grid.theta[[i, grid.ntheta + 1]] = 0.0;
-        grid.theta_av[[i, 1]] = (grid.theta[[i, 0]] + grid.theta[[i, 2]]) / 2.0;
+        grid.theta[[i, 1]] = (grid.theta[[i, 0]] + grid.theta[[i, 2]]) / 2.0;
 
         if flitsc.cylindrical {
             grid.theta_av[[i, 1]] = grid.theta[[i, 1]].acos() / 2.0;
         } else {
-            grid.theta_av[[i, 1]] = 1.0;
+            grid.theta[[i, 1]] = 1.0;
             grid.theta_av[[i, 0]] = 0.0;
         }
 
@@ -505,8 +505,8 @@ pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<SimState> {
     let c = &mut sim_state.c;
     let grid = &sim_state.grid;
 
-    for i in 1..(grid.nr - 1) {
-        for j in 1..(grid.ntheta) {
+    for i in 1..grid.nr {
+        for j in 1..=grid.ntheta {
             let xx = grid.r_av[i];
             let zz = xx / grid.theta_av[[i, j]].tan();
             let rr = (xx * xx + zz * zz).sqrt();
@@ -517,7 +517,7 @@ pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<SimState> {
         }
     }
 
-    for j in 0..grid.ntheta {
+    for j in 0..=grid.ntheta {
         c[[0, j]].kext.fill(1e-70);
         c[[grid.nr, j]].kext.fill(1e-70);
         c[[0, j]].kabs.fill(1e-70);
