@@ -5,16 +5,19 @@ use std::io::BufReader;
 use std::path::{Path as OSPath, PathBuf};
 
 use anyhow::Result;
+use extensions::types::RTensor4;
+use extensions::types::{BVector, RMatrix, RTensor, RVector, UVector, Vector};
 use fitsio::hdu::FitsHdu;
 use fitsio::FitsFile;
+use ndarray::array;
 use ndarray::s;
 use ndarray::Array2;
 use ndarray::Zip;
 use spectre::lamda::Level;
 
 use crate::constants as cc;
-use crate::types::RTensor4;
-use crate::types::{BVector, PLVector, RMatrix, RTensor, RVector, UVector};
+
+pub type PLVector = Vector<PopulationLevels>;
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
@@ -575,4 +578,39 @@ pub enum AccuracyLevel {
 pub enum Model {
     ProDiMo,
     McMax,
+}
+
+pub trait Rotate {
+    /// Rotate this vector around `axis` by angle `theta` (radians).
+    /// Assumes axis is already normalized.
+    /// Modifies the vector in-place.
+    fn rotate(&mut self, axis: &RVector, theta: f64);
+}
+
+impl Rotate for RVector {
+    fn rotate(&mut self, axis: &RVector, theta: f64) {
+        assert_eq!(self.len(), 3, "Vector must be 3-D");
+        assert_eq!(axis.len(), 3, "Axis must be 3-D");
+
+        let cost = theta.cos();
+        let sint = theta.sin();
+
+        // Rodrigues' rotation formula (assuming axis is normalized)
+        let dot = axis.dot(self);
+        let term1 = &*self * cost;
+        let term2 = axis * (dot * (1.0 - cost));
+        let cross = array![
+            axis[1] * self[2] - axis[2] * self[1],
+            axis[2] * self[0] - axis[0] * self[2],
+            axis[0] * self[1] - axis[1] * self[0],
+        ];
+        let term3 = cross * sint;
+
+        let result = term1 + term2 + term3;
+
+        // Modify in-place
+        self[0] = result[0];
+        self[1] = result[1];
+        self[2] = result[2];
+    }
 }

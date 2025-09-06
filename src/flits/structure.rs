@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
+use extensions::types::{RVector, UVector};
+
 use crate::constants as cc;
 
-use crate::types::{PLVector, RVector, UVector};
-
-use super::config::{FLITSConfig, SimState};
+use super::config::{FLITSConfig, PLVector, SimState};
 use super::local::compute_LTE;
 
 pub const MAXT: usize = 5000;

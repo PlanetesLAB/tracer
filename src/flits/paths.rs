@@ -1,15 +1,22 @@
-use std::f64::consts::PI;
+use std::{f64::consts::PI, process::exit};
 
 use anyhow::Result;
+use extensions::types::{BVector, Matrix, RMatrix, RVector, UMatrix, UVector};
+use ndarray::{array, s};
+use rand::Rng;
+use rayon::array;
 
 use crate::{
     flits::{
-        config::{AccuracyLevel, FLITSConfig, Grid, SimState},
+        config::{AccuracyLevel, FLITSConfig, Grid, Path, Rotate, SimState},
+        delaunay::{triangulate, Point},
         io::write_image_grid,
     },
-    types::UVector,
+    lite::star,
     utils::ArrayExtrema,
 };
+
+pub type PathMatrix = Matrix<Path>;
 
 pub fn setup_paths(state: &SimState, flitsc: &FLITSConfig) -> Result<()> {
     let grid = &state.grid;
@@ -112,12 +119,98 @@ pub fn setup_paths(state: &SimState, flitsc: &FLITSConfig) -> Result<()> {
 
     imr.sort_by(|a, b| a.total_cmp(b));
 
-    write_image_grid(imr, grid.r_sph[grid.nr + 1])?;
+    write_image_grid(&imr, grid.r_sph[grid.nr + 1])?;
 
-    let nim_phi = UVector::zeros(new_len);
-    let start_phi = UVector::zeros(new_len);
+    let mut nim_phi = UVector::zeros(new_len);
+    let mut start_phi = BVector::default(new_len + 1);
 
-    let mut n_imphi_max = 1;
+    let mut n_imphi_max = 0;
+    start_phi[0] = true;
+
+    let mut n_pts_temp = 0;
+
+    for i in 0..new_len {
+        let j = (1..grid.nr)
+            .find(|&j| imr[i] > grid.r[j] && imr[i] < grid.r[j + 1])
+            .unwrap_or(0);
+        nim_phi[i] =
+            (inc.sin().abs() * c[[j, grid.ntheta]].v / flitsc.vresolution * res_inc) as usize;
+        if nim_phi[i] < n_phi_min {
+            nim_phi[i] = n_phi_min;
+        }
+        if nim_phi[i] > n_phi_max {
+            nim_phi[i] = n_phi_max;
+        }
+        if start_phi[i] {
+            nim_phi[i] += 1;
+            start_phi[i + 1] = false;
+        } else {
+            start_phi[i + 1] = true;
+        }
+        if nim_phi[i] > n_imphi_max {
+            n_imphi_max = nim_phi[i];
+        }
+        n_pts_temp += nim_phi[i];
+    }
+
+    const N_GRIDS: usize = 5;
+
+    let mut imphi = RMatrix::zeros((new_len, n_imphi_max));
+
+    for i in 0..new_len {
+        if start_phi[i] {
+            for j in 0..nim_phi[i] {
+                imphi[[i, j]] = PI * (j as f64 + 0.5) / (nim_phi[i] as f64);
+            }
+        } else {
+            for j in 0..nim_phi[i] {
+                imphi[[i, j]] = PI * (j as f64) / ((nim_phi[i] - 1) as f64);
+            }
+        }
+    }
+
+    let mut xy = Vec::new();
+    let n_pts = UVector::zeros(N_GRIDS);
+
+    let mat_len = 2 * n_pts_temp - 3;
+
+    let mut p = PathMatrix::default((N_GRIDS, mat_len));
+    let mut t_node = UMatrix::zeros((3, mat_len));
+    let mut t_neigh = UMatrix::zeros((3, mat_len));
+    let matrix = array![[1.0, 0.0], [0.0, 1.0]];
+
+    let mut rng = rand::rng();
+
+    let mut k = 0;
+    for i in 0..N_GRIDS {
+        for j in 0..n_pts_temp {
+            let ir: usize = rng.random_range(0..=grid.nr);
+            let it: usize = rng.random_range(0..=grid.ntheta);
+
+            let rrr = rng.random::<f64>();
+            let rr = (grid.r[ir].powi(2) * rrr + grid.r[ir + 1].powi(2) * (1.0 - rrr)).sqrt();
+
+            let ttt = rng.random::<f64>();
+            let tt = (grid.theta[[ir, it]] * ttt + grid.theta[[ir, it + 1]] * (1.0 - ttt)).acos();
+
+            let ph = rng.random::<f64>() * 2.0 * PI;
+
+            let mut im_vec = array![
+                rr * ph.cos() * tt.sin(),
+                rr * ph.sin() * tt.sin(),
+                rr * tt.cos()
+            ];
+            let axis = array![0.0, 1.0, 0.0];
+            let theta = -inc;
+            im_vec.rotate(&axis, theta);
+
+            xy.push(Point {
+                x: im_vec[0],
+                y: im_vec[1],
+            });
+        }
+        triangulate(&mut xy);
+    }
 
     Ok(())
 }
@@ -155,7 +248,7 @@ fn trace_to_tau(j: usize, state: &SimState, flitsc: &FLITSConfig) -> f64 {
 fn get_inclination_factor(r: f64, cos_inc: f64, grid: &Grid) -> f64 {
     cos_inc
         + (1.0 - cos_inc)
-            * ((r - grid.r_sph[1]) / grid.r_sph[grid.nr + 1] - grid.r_sph[1])
+            * ((r - grid.r_sph[1]) / (grid.r_sph[grid.nr + 1] - grid.r_sph[1]))
                 .powi(2)
                 .min(cos_inc)
 }

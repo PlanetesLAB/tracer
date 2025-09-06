@@ -4,6 +4,7 @@ use std::io::Write;
 use std::io::{BufReader, BufWriter};
 
 use anyhow::{bail, Result};
+use extensions::types::{Matrix, RMatrix, RTensor, RTensor4, RVector, UVector};
 use fitsio::hdu::FitsHdu;
 use fitsio::FitsFile;
 use flate2::read::GzDecoder;
@@ -13,9 +14,11 @@ use ndarray::Axis;
 use spectre::lamda::LAMDAData;
 
 use crate::constants as cc;
-use crate::types::{CellMatrix, RMatrix, RTensor, RTensor4, RVector, UVector};
+use crate::flits::config::Cell;
 
 use super::config::{FLITSConfig, Grid, Molecule, RadTransition, SimState};
+
+pub type CellMatrix = Matrix<Cell>;
 
 #[derive(Debug, Clone, Copy)]
 #[repr(i32)]
@@ -517,7 +520,7 @@ pub fn read_lamda_files(flitsc: &FLITSConfig) -> Result<Vec<Molecule>> {
     Ok(mol)
 }
 
-pub fn write_image_grid(imr: Vec<f64>, r_sph_val: f64) -> Result<()> {
+pub fn write_image_grid(imr: &[f64], r_sph_val: f64) -> Result<()> {
     fs::create_dir_all("output")?;
 
     let file = File::create("output/imagegrid.out")?;

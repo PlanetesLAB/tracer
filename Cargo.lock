@@ -100,6 +100,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
+name = "extensions"
+version = "0.1.0"
+source = "git+https://github.com/ProsiaLAB/extensions.git#26441769ca972319a1af4ef1a07edb6ed5e166cc"
+dependencies = [
+ "ndarray",
+]
+
+[[package]]
 name = "fitsio"
 version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -370,6 +378,7 @@ name = "tracer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "extensions",
  "fitsio",
  "flate2",
  "ndarray",

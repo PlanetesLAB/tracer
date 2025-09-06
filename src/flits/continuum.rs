@@ -1,6 +1,7 @@
 //! Continuum ray-tracing
 
-use crate::types::{RMatrix, RVector};
+use extensions::types::{RMatrix, RVector};
+
 use crate::utils::physics::planck;
 
 use super::config::{FLITSConfig, Grid, Path};
