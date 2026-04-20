@@ -27,7 +27,7 @@ fn main() -> Result<()> {
             todo!("RadLite functionality not implemented yet");
         }
         _ => {
-            eprintln!("Invalid mode: {}", mode);
+            eprintln!("Invalid mode: {mode}");
             std::process::exit(1);
         }
     }
@@ -50,7 +50,7 @@ fn run_flits<P: AsRef<Path>>(fname: P) -> Result<()> {
     let mut sim_state = read_fits(&mut flitsc)?;
     sim_state.mol = read_lamda_files(&flitsc)?;
     prepare_structure(&mut sim_state, &flitsc);
-    setup_paths(&mut sim_state, &flitsc);
+    let _ = setup_paths(&sim_state, &flitsc);
 
     Ok(())
 }

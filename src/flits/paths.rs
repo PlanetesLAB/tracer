@@ -1,24 +1,28 @@
-use std::{f64::consts::PI, process::exit};
+use std::f64::consts::PI;
 
 use anyhow::Result;
-use extensions::types::{BVector, Matrix, RMatrix, RVector, UMatrix, UVector};
-use ndarray::{array, s};
+use extensions::types::{BVector, Matrix, RMatrix, UMatrix, UVector};
+use ndarray::array;
 use rand::Rng;
-use rayon::array;
 
 use crate::{
     flits::{
         config::{AccuracyLevel, FLITSConfig, Grid, Path, Rotate, SimState},
-        delaunay::{triangulate, Point},
+        delaunay::Point,
         io::write_image_grid,
     },
-    lite::star,
     utils::ArrayExtrema,
 };
 
 pub type PathMatrix = Matrix<Path>;
 
+/// Sets up the paths for ray tracing based on the provided simulation state and configuration.
+///
+/// # Errors
+/// Returns an error if there is an issue writing the image grid to the output directory.
 pub fn setup_paths(state: &SimState, flitsc: &FLITSConfig) -> Result<()> {
+    const N_GRIDS: usize = 5;
+
     let grid = &state.grid;
     let c = &state.c;
 
@@ -69,7 +73,7 @@ pub fn setup_paths(state: &SimState, flitsc: &FLITSConfig) -> Result<()> {
         }
     }
 
-    imr.sort_by(|a, b| a.total_cmp(b));
+    imr.sort_by(f64::total_cmp);
 
     let initial_len = imr.len();
     let buffer_len = (inc.sin().abs() * c[[1, grid.ntheta]].v / flitsc.vresolution * res_inc / 2.0)
@@ -113,11 +117,11 @@ pub fn setup_paths(state: &SimState, flitsc: &FLITSConfig) -> Result<()> {
         imr[cursor] = 10.0f64.powf(r_log10 + r_sph_log10 * ((i + 1) as f64 - 0.1) / (j as f64));
     }
 
-    imr.iter_mut().for_each(|val| {
+    for val in &mut imr {
         *val = val.abs();
-    });
+    }
 
-    imr.sort_by(|a, b| a.total_cmp(b));
+    imr.sort_by(f64::total_cmp);
 
     write_image_grid(&imr, grid.r_sph[grid.nr + 1])?;
 
@@ -152,8 +156,6 @@ pub fn setup_paths(state: &SimState, flitsc: &FLITSConfig) -> Result<()> {
         }
         n_pts_temp += nim_phi[i];
     }
-
-    const N_GRIDS: usize = 5;
 
     let mut imphi = RMatrix::zeros((new_len, n_imphi_max));
 
@@ -209,7 +211,7 @@ pub fn setup_paths(state: &SimState, flitsc: &FLITSConfig) -> Result<()> {
                 y: im_vec[1],
             });
         }
-        triangulate(&mut xy);
+        // triangulate(&mut xy);
     }
 
     Ok(())
@@ -235,10 +237,9 @@ fn trace_to_tau(j: usize, state: &SimState, flitsc: &FLITSConfig) -> f64 {
                 let mut rr = grid.r[i] + (grid.r[i + 1] - grid.r[i]) * (1.0 - tau) / tau_0;
                 rr /= grid.theta_av[[i, j]].sin();
                 return rr;
-            } else {
-                let rr = grid.r_sph[i] + (grid.r_sph[i + 1] - grid.r_sph[i]) * (1.0 - tau) / tau_0;
-                return rr;
             }
+            let rr = grid.r_sph[i] + (grid.r_sph[i + 1] - grid.r_sph[i]) * (1.0 - tau) / tau_0;
+            return rr;
         }
         tau += tau_0;
     }

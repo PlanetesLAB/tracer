@@ -64,6 +64,7 @@ where
 pub mod physics {
     use crate::constants as cc;
 
+    #[must_use]
     pub fn planck(t: f64, lam: f64) -> f64 {
         let nu = cc::SPEED_OF_LIGHT_CGS / (lam * 1e-4);
         let x = cc::PLANCK_CGS * nu / (cc::BOLTZMANN_CGS * t);

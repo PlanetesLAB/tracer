@@ -3,14 +3,14 @@ use std::io;
 use std::io::Write;
 use std::io::{BufReader, BufWriter};
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use extensions::types::{Matrix, RMatrix, RTensor, RTensor4, RVector, UVector};
-use fitsio::hdu::FitsHdu;
 use fitsio::FitsFile;
+use fitsio::hdu::FitsHdu;
 use flate2::read::GzDecoder;
-use ndarray::s;
 use ndarray::ArrayD;
 use ndarray::Axis;
+use ndarray::s;
 use spectre::lamda::LAMDAData;
 
 use crate::constants as cc;
@@ -39,9 +39,9 @@ pub enum CellParameter {
 
 impl CellParameter {
     fn read_next(
-        &self,
+        self,
         c: &mut CellMatrix,
-        hdu: FitsHdu,
+        hdu: &FitsHdu,
         fptr: &mut FitsFile,
         grid: &mut Grid,
         flitsc: &mut FLITSConfig,
@@ -68,7 +68,7 @@ impl CellParameter {
                 for imol in 0..nspec {
                     match fptr.iter().nth(13 + imol) {
                         Some(hdu) => {
-                            Self::read_hdu_level_populations(imol, hdu, fptr, c, grid, flitsc)?;
+                            Self::read_hdu_level_populations(imol, &hdu, fptr, c, grid, flitsc)?;
                         }
                         None => return Ok(()), // No more HDUs
                     }
@@ -79,9 +79,10 @@ impl CellParameter {
         Ok(())
     }
 
+    #[allow(clippy::assigning_clones)]
     fn read_hdu_generic(
-        kind: &CellParameter,
-        hdu: FitsHdu,
+        kind: CellParameter,
+        hdu: &FitsHdu,
         fptr: &mut FitsFile,
         c: &mut CellMatrix,
         grid: &mut Grid,
@@ -91,7 +92,7 @@ impl CellParameter {
             CellParameter::GasTemperature => {
                 let naxis = 2;
                 let data = extract_data(fptr, hdu, naxis)?;
-                for i in 1..=(grid.nr - 1) {
+                for i in 1..grid.nr {
                     for j in 2..=grid.ntheta {
                         let val = data[[i - 1, grid.ntheta - j, 0, 0]];
                         let clamped_temp = if val < 1.0 { 1.0 } else { val };
@@ -103,7 +104,7 @@ impl CellParameter {
             CellParameter::DustTemperature => {
                 let naxis = 2;
                 let data = extract_data(fptr, hdu, naxis)?;
-                for i in 1..=(grid.nr - 1) {
+                for i in 1..grid.nr {
                     for j in 2..=grid.ntheta {
                         let val = data[[i - 1, grid.ntheta - j, 0, 0]];
                         let clamped_temp = if val < 1.0 { 1.0 } else { val };
@@ -115,7 +116,7 @@ impl CellParameter {
             CellParameter::GasDensity => {
                 let naxis = 2;
                 let data = extract_data(fptr, hdu, naxis)?;
-                for i in 1..=(grid.nr - 1) {
+                for i in 1..grid.nr {
                     for j in 2..=grid.ntheta {
                         let val = data[[i - 1, grid.ntheta - j, 0, 0]];
                         let clamped_density = if val < 1e-50 { 1e-60 } else { val };
@@ -164,8 +165,8 @@ impl CellParameter {
             CellParameter::AbsOpacities => {
                 let naxis = 4;
                 let data = extract_data(fptr, hdu, naxis)?;
-                for i in 1..=(grid.nr - 1) {
-                    for j in 2..=(grid.ntheta) {
+                for i in 1..grid.nr {
+                    for j in 2..=grid.ntheta {
                         for k in 0..grid.nlam {
                             c[[i, j]].kabs[k] = data[[k, i - 1, grid.ntheta - j, 0]];
                         }
@@ -176,8 +177,8 @@ impl CellParameter {
             CellParameter::ExtOpacities => {
                 let naxis = 4;
                 let data = extract_data(fptr, hdu, naxis)?;
-                for i in 1..=(grid.nr - 1) {
-                    for j in 2..=(grid.ntheta) {
+                for i in 1..grid.nr {
+                    for j in 2..=grid.ntheta {
                         for k in 0..grid.nlam {
                             c[[i, j]].kext[k] = data[[k, i - 1, grid.ntheta - j, 0]];
                             c[[i, j]].albedo[k] = if c[[i, j]].kext[k] > 1e-150 {
@@ -194,8 +195,8 @@ impl CellParameter {
             CellParameter::InternalField => {
                 let naxis = 3;
                 let data = extract_data(fptr, hdu, naxis)?;
-                for i in 1..=(grid.nr - 1) {
-                    for j in 2..=(grid.ntheta) {
+                for i in 1..grid.nr {
+                    for j in 2..=grid.ntheta {
                         for k in 0..grid.nlam {
                             c[[i, j]].lrf[k] = data[[k, i - 1, grid.ntheta - j, 0]];
                         }
@@ -206,8 +207,8 @@ impl CellParameter {
             CellParameter::SourceFunction => {
                 let naxis = 3;
                 let data = extract_data(fptr, hdu, naxis)?;
-                for i in 1..=(grid.nr - 1) {
-                    for j in 2..=(grid.ntheta) {
+                for i in 1..grid.nr {
+                    for j in 2..=grid.ntheta {
                         for k in 0..grid.nlam {
                             c[[i, j]].s[k] = data[[k, i - 1, grid.ntheta - j, 0]];
                         }
@@ -218,8 +219,8 @@ impl CellParameter {
             CellParameter::MolecularParticleDensities => {
                 let naxis = 3;
                 let data = extract_data(fptr, hdu, naxis)?;
-                for i in 1..=(grid.nr - 1) {
-                    for j in 2..=(grid.ntheta) {
+                for i in 1..grid.nr {
+                    for j in 2..=grid.ntheta {
                         for imol in 0..grid.nspec {
                             c[[i, j]].n0[imol] = data[[imol, i - 1, grid.ntheta - j, 0]];
                         }
@@ -231,8 +232,8 @@ impl CellParameter {
                 let nmol = flitsc.line_files.len();
                 let naxis = 3;
                 let data = extract_data(fptr, hdu, naxis)?;
-                for i in 1..=(grid.nr - 1) {
-                    for j in 2..=(grid.ntheta) {
+                for i in 1..grid.nr {
+                    for j in 2..=grid.ntheta {
                         for imol in 0..nmol {
                             c[[i, j]].line_width0[imol] = data[[imol, i - 1, grid.ntheta - j, 0]];
                         }
@@ -247,9 +248,10 @@ impl CellParameter {
         Ok(())
     }
 
+    #[allow(clippy::assigning_clones)]
     fn read_hdu_level_populations(
         imol: usize,
-        hdu: FitsHdu,
+        hdu: &FitsHdu,
         fptr: &mut FitsFile,
         c: &mut CellMatrix,
         grid: &Grid,
@@ -301,11 +303,15 @@ const CELL_PARAMS_ORDER: &[CellParameter] = &[
     CellParameter::RelativeLevelPopulations,
 ];
 
+/// Reads the FLITS file, uncompressing if necessary, and extracts the grid and cell parameters into a [`SimState`] struct.
+///
+/// # Errors
+/// If the FLITS file cannot be found, uncompressed, or read properly, an error is returned.
 pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<SimState> {
     flitsc.flits_file = flitsc
         .flits_file_compressed
         .strip_suffix(".gz")
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .ok_or(anyhow::anyhow!("FLITS file name must end with .gz"))?;
 
     let fits_path = flitsc.config_dir.join(&flitsc.flits_file);
@@ -320,15 +326,15 @@ pub fn read_fits(flitsc: &mut FLITSConfig) -> Result<SimState> {
     let c = read_cell_parameters(&mut fptr, flitsc, &mut grid)?;
 
     let sim_state = SimState {
-        grid,
         c,
+        grid,
         ..Default::default()
     };
 
     Ok(sim_state)
 }
 
-fn extract_data(fptr: &mut FitsFile, hdu: FitsHdu, naxis: usize) -> Result<RTensor4> {
+fn extract_data(fptr: &mut FitsFile, hdu: &FitsHdu, naxis: usize) -> Result<RTensor4> {
     let data: ArrayD<f64> = hdu.read_image(fptr)?;
     match naxis {
         1 => {
@@ -385,7 +391,7 @@ fn read_grid(fptr: &mut FitsFile, flitsc: &mut FLITSConfig) -> Result<Grid> {
     let data3: RTensor = data.into_dimensionality()?;
     let array = data3.permuted_axes([2, 1, 0]).insert_axis(Axis(3));
 
-    grid.initialize(array, flitsc);
+    grid.initialize(&array, flitsc);
 
     Ok(grid)
 }
@@ -404,12 +410,12 @@ fn read_cell_parameters(
     }
 
     // Process rest of HDUs
-    for param in CELL_PARAMS_ORDER.iter() {
+    for param in CELL_PARAMS_ORDER {
         let hdu = fptr
             .iter()
             .nth(*param as usize)
             .ok_or_else(|| anyhow::anyhow!("No HDUs found in FITS file"))?;
-        param.read_next(&mut c, hdu, fptr, grid, flitsc)?;
+        param.read_next(&mut c, &hdu, fptr, grid, flitsc)?;
     }
 
     set_boundary_conditions(&mut c, grid, flitsc);
@@ -468,6 +474,10 @@ fn set_boundary_conditions(c: &mut CellMatrix, grid: &Grid, flitsc: &FLITSConfig
     }
 }
 
+/// Reads the LAMDA files specified in the configuration and populates the `Molecule` structs in the `FLITSConfig`.
+///
+/// # Errors
+/// If any of the LAMDA files cannot be found or read properly, an error is returned.
 pub fn read_lamda_files(flitsc: &FLITSConfig) -> Result<Vec<Molecule>> {
     let mut mol = Vec::with_capacity(flitsc.line_files.len());
     let two_h_over_c2 = 2.0 * cc::PLANCK_CGS / cc::SPEED_OF_LIGHT_CGS.powi(2);
@@ -520,6 +530,10 @@ pub fn read_lamda_files(flitsc: &FLITSConfig) -> Result<Vec<Molecule>> {
     Ok(mol)
 }
 
+/// Writes the image grid to a file in the output directory, scaling the values by the astronomical unit in CGS units.
+///
+/// # Errors
+/// If the output directory cannot be created or the file cannot be written, an error is returned.
 pub fn write_image_grid(imr: &[f64], r_sph_val: f64) -> Result<()> {
     fs::create_dir_all("output")?;
 
@@ -529,7 +543,7 @@ pub fn write_image_grid(imr: &[f64], r_sph_val: f64) -> Result<()> {
     writeln!(writer, "{}", r_sph_val / cc::AU_CGS)?;
     writeln!(writer)?; // empty line
 
-    for val in imr.iter() {
+    for val in imr {
         writeln!(writer, "{}", val / cc::AU_CGS)?;
     }
 

@@ -1,7 +1,4 @@
-use core::panic;
 use std::{cmp::Ordering, process::exit};
-
-use extensions::types::RMatrix;
 
 pub fn triangulate(mut points: Vec<Point>) {
     let tol = 100.0 * f64::EPSILON;
@@ -117,6 +114,7 @@ pub enum Position {
 }
 
 impl Line {
+    #[must_use]
     pub fn relative_to(&self, p: &Point, dv: f64) -> Position {
         let tol = 100.0 * f64::EPSILON;
 

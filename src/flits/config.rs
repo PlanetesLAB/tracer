@@ -1,4 +1,4 @@
-//! Global configuration for the FLiTs program.
+//! Global configuration for the `FLiTs` program.
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -7,12 +7,12 @@ use std::path::{Path as OSPath, PathBuf};
 use anyhow::Result;
 use extensions::types::RTensor4;
 use extensions::types::{BVector, RMatrix, RTensor, RVector, UVector, Vector};
-use fitsio::hdu::FitsHdu;
 use fitsio::FitsFile;
-use ndarray::array;
-use ndarray::s;
+use fitsio::hdu::FitsHdu;
 use ndarray::Array2;
 use ndarray::Zip;
+use ndarray::array;
+use ndarray::s;
 use spectre::lamda::Level;
 
 use crate::constants as cc;
@@ -116,6 +116,13 @@ impl Default for FLITSConfig {
 }
 
 impl FLITSConfig {
+    /// Load configuration from a file at the given path.
+    ///
+    /// # Errors
+    /// Will return an error if the file cannot be read, or if any line is malformed.
+    ///
+    /// # Panics
+    /// Will panic if any expected value cannot be parsed as the correct type.
     pub fn load_from_path<P: AsRef<OSPath>>(&mut self, path: P) -> Result<()> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
@@ -164,9 +171,9 @@ impl FLITSConfig {
                 }
             }
             if key == "LTE" {
-                if value.contains("true") || value.contains("1") {
+                if value.contains("true") || value.contains('1') {
                     self.LTE = true;
-                } else if value.contains("false") || value.contains("0") {
+                } else if value.contains("false") || value.contains('0') {
                     self.LTE = false;
                 } else {
                     return Err(anyhow::anyhow!("Invalid value for LTE in line: {}", line));
@@ -189,7 +196,7 @@ impl FLITSConfig {
                         return Err(anyhow::anyhow!(
                             "Invalid value for accuracy in line: {}",
                             line
-                        ))
+                        ));
                     }
                 };
             }
@@ -230,6 +237,10 @@ pub struct Grid {
 }
 
 impl Grid {
+    /// Load grid configuration from a FITS file and HDU.
+    ///
+    /// # Errors
+    /// Will return an error if the FITS file cannot be read, or if any expected key is missing from the HDU.
     pub fn from_hdu(fptr: &mut FitsFile, hdu: &FitsHdu) -> Result<Self> {
         Ok(Self {
             rin: hdu.read_key::<f64>(fptr, "Rin")?,
@@ -249,7 +260,14 @@ impl Grid {
         self.theta_av = RMatrix::zeros(((self.nr + 1), (self.ntheta + 1)));
     }
 
-    pub fn initialize(&mut self, data: RTensor4, flitsc: &FLITSConfig) {
+    /// Initialize the grid from the given 4D data array and configuration.
+    ///
+    /// # Errors
+    /// Will return an error if the data array does not have the expected shape, or if any required value is missing from the configuration.
+    ///
+    /// # Panics
+    /// Will panic if any value in the data array cannot be parsed as a float, or if any expected index is out of bounds.
+    pub fn initialize(&mut self, data: &RTensor4, flitsc: &FLITSConfig) {
         self.allocate();
 
         self.rin = data[[0, 0, 0, 0]] / cc::AU_CGS;
@@ -278,10 +296,10 @@ impl Grid {
             self.theta[[i, 0]] = 1.0;
             for j in 2..=self.ntheta {
                 self.theta[[i, j]] = data[[i - 1, self.ntheta - j, 3, 0]]
-                    / (self.r_av[i].powi(2) + data[[i - 1, self.ntheta - j, 3, 0]].powi(2)).sqrt()
+                    / (self.r_av[i].powi(2) + data[[i - 1, self.ntheta - j, 3, 0]].powi(2)).sqrt();
             }
             self.theta[[i, self.ntheta + 1]] = 0.0;
-            self.theta[[i, 1]] = (self.theta[[i, 0]] + self.theta[[i, 2]]) / 2.0;
+            self.theta[[i, 1]] = f64::midpoint(self.theta[[i, 0]], self.theta[[i, 2]]);
 
             if flitsc.cylindrical {
                 self.theta_av[[i, 1]] = self.theta[[i, 1]].acos() / 2.0;
@@ -291,7 +309,8 @@ impl Grid {
             }
 
             for j in 1..=(self.ntheta) {
-                self.theta_av[[i, j]] = ((self.theta[[i, j]] + self.theta[[i, j + 1]]) / 2.0).acos()
+                self.theta_av[[i, j]] =
+                    (f64::midpoint(self.theta[[i, j]], self.theta[[i, j + 1]])).acos();
             }
 
             if self.theta[[i, 2]] > theta_max {
@@ -350,7 +369,7 @@ impl Grid {
             .slice_mut(s![1..=(self.nr + 1)])
             .as_slice_mut()
             .unwrap()
-            .sort_by(|a, b| a.total_cmp(b));
+            .sort_by(f64::total_cmp);
 
         self.r_sph = RVector::zeros(self.nr + 2);
         self.r_av_sph = RVector::zeros(self.nr + 2);

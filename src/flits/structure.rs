@@ -9,6 +9,7 @@ use super::local::compute_LTE;
 
 pub const MAXT: usize = 5000;
 
+#[allow(clippy::assigning_clones)]
 pub fn prepare_structure(state: &mut SimState, flitsc: &FLITSConfig) {
     let c = &mut state.c;
     let grid = &state.grid;
@@ -96,10 +97,9 @@ pub fn prepare_structure(state: &mut SimState, flitsc: &FLITSConfig) {
                     if let Some(ipop) = (0..flitsc.npop0[idx])
                         .rev()
                         .find(|&ipop| c[[i, j]].npop[imol].n[ipop] > 1e-150_f64)
+                        && ipop > c[[i, j]].npopmax[imol]
                     {
-                        if ipop > c[[i, j]].npopmax[imol] {
-                            c[[i, j]].npopmax[imol] = ipop;
-                        }
+                        c[[i, j]].npopmax[imol] = ipop;
                     }
                 }
             }
@@ -117,7 +117,7 @@ pub fn prepare_structure(state: &mut SimState, flitsc: &FLITSConfig) {
     println!("Mass of the star: {} solar masses", flitsc.m_star);
     println!("Minimum wavelength: {} microns", flitsc.lmin);
     println!("Maximum wavelength: {} microns", flitsc.lmax);
-    println!("Resolution: {} (dlam/lam)", rlines);
+    println!("Resolution: {rlines} (dlam/lam)");
     println!("Velocity resolution: {} km/s", flitsc.vresolution / 1e5);
     println!("Inclination: {} degrees", flitsc.inc);
 }
