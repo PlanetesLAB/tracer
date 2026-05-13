@@ -60,6 +60,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9555578bc9e57714c812a1f84e4fc5b4d21fcb063490c624de019f7464c91268"
 
 [[package]]
+name = "codata"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4f2c0b7e19d523bfccd3705d0e710f3b8633cec2c5840ae020dcb2bb5a5d213"
+
+[[package]]
 name = "crc32fast"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -100,18 +106,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
-name = "extensions"
-version = "0.1.0"
-source = "git+https://github.com/ProsiaLAB/extensions.git#26441769ca972319a1af4ef1a07edb6ed5e166cc"
-dependencies = [
- "ndarray",
-]
-
-[[package]]
 name = "fitsio"
-version = "0.21.7"
+version = "0.21.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bcdf0a688dc948f191d1ba288dff7e86d28c34aba4f94ffb5812672c152e0e4"
+checksum = "9b2a7b7eee7f284a95437774d1152e04706f690d549687004ab7ae73cc776d08"
 dependencies = [
  "fitsio-sys",
  "libc",
@@ -177,9 +175,9 @@ dependencies = [
 
 [[package]]
 name = "ndarray"
-version = "0.16.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "882ed72dce9365842bf196bdeedf5055305f11fc8c03dee7bb0194a6cad34841"
+checksum = "520080814a7a6b4a6e9070823bb24b4531daac8c4627e08ba5de8c5ef2f2752d"
 dependencies = [
  "matrixmultiply",
  "num-complex",
@@ -254,6 +252,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d61789d7719defeb74ea5fe81f2fdfdbd28a803847077cecce2ff14e1472f6f1"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "prosia-extensions"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6bc4a0756b757084a56883b8fae296f87619769f31709f7782fbf147ac4b6513"
+dependencies = [
+ "ndarray",
+ "num-traits",
 ]
 
 [[package]]
@@ -378,10 +386,11 @@ name = "tracer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "extensions",
+ "codata",
  "fitsio",
  "flate2",
  "ndarray",
+ "prosia-extensions",
  "rand",
  "rayon",
  "spectre",
