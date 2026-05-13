@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
-use extensions::types::{RVector, UVector};
-
-use crate::constants as cc;
+use codata as cc;
+use prosia_extensions::types::{RVector, UVector};
 
 use super::config::{FLITSConfig, PLVector, SimState};
 use super::local::compute_LTE;
@@ -109,8 +108,8 @@ pub fn prepare_structure(state: &mut SimState, flitsc: &FLITSConfig) {
     compute_LTE(state);
 
     let rlines = 1.0
-        / (((1.0 + flitsc.vresolution / cc::SPEED_OF_LIGHT_CGS)
-            / (1.0 - flitsc.vresolution / cc::SPEED_OF_LIGHT_CGS))
+        / (((1.0 + flitsc.vresolution / cc::SPEED_OF_LIGHT_IN_VACUUM_CGS)
+            / (1.0 - flitsc.vresolution / cc::SPEED_OF_LIGHT_IN_VACUUM_CGS))
             .sqrt()
             - 1.0);
 

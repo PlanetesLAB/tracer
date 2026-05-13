@@ -1,17 +1,17 @@
 use std::f64::consts::PI;
 
 use anyhow::Result;
-use extensions::types::{BVector, Matrix, RMatrix, UMatrix, UVector};
 use ndarray::array;
+use prosia_extensions::{
+    arrays::ArrayExtrema,
+    types::{BVector, Matrix, RMatrix, UMatrix, UVector},
+};
 use rand::Rng;
 
-use crate::{
-    flits::{
-        config::{AccuracyLevel, FLITSConfig, Grid, Path, Rotate, SimState},
-        delaunay::Point,
-        io::write_image_grid,
-    },
-    utils::ArrayExtrema,
+use crate::flits::{
+    config::{AccuracyLevel, FLITSConfig, Grid, Path, Rotate, SimState},
+    delaunay::Point,
+    io::write_image_grid,
 };
 
 pub type PathMatrix = Matrix<Path>;

@@ -5,17 +5,16 @@ use std::io::BufReader;
 use std::path::{Path as OSPath, PathBuf};
 
 use anyhow::Result;
-use extensions::types::RTensor4;
-use extensions::types::{BVector, RMatrix, RTensor, RVector, UVector, Vector};
+use codata as cc;
 use fitsio::FitsFile;
 use fitsio::hdu::FitsHdu;
 use ndarray::Array2;
 use ndarray::Zip;
 use ndarray::array;
 use ndarray::s;
+use prosia_extensions::types::RTensor4;
+use prosia_extensions::types::{BVector, RMatrix, RTensor, RVector, UVector, Vector};
 use spectre::lamda::Level;
-
-use crate::constants as cc;
 
 pub type PLVector = Vector<PopulationLevels>;
 
@@ -270,12 +269,12 @@ impl Grid {
     pub fn initialize(&mut self, data: &RTensor4, flitsc: &FLITSConfig) {
         self.allocate();
 
-        self.rin = data[[0, 0, 0, 0]] / cc::AU_CGS;
+        self.rin = data[[0, 0, 0, 0]] / cc::astro::AU_CGS;
         println!("Adjusting Rin to:  {}", self.rin);
-        self.rout = data[[self.nr - 2, 0, 1, 0]] / cc::AU_CGS;
+        self.rout = data[[self.nr - 2, 0, 1, 0]] / cc::astro::AU_CGS;
         println!("Adjusting Rout to: {}", self.rout);
 
-        self.r[0] = flitsc.r_star * cc::SOLAR_RADIUS_CGS;
+        self.r[0] = flitsc.r_star * cc::astro::R_SUN_CGS;
 
         self.r
             .slice_mut(s![1..self.nr])
@@ -360,7 +359,7 @@ impl Grid {
             self.rout *= 1.0001;
         }
 
-        self.r[self.nr + 1] = self.rout * cc::AU_CGS;
+        self.r[self.nr + 1] = self.rout * cc::astro::AU_CGS;
 
         self.r_av[self.nr - 1] = (self.r[self.nr - 1] * self.r[self.nr]).sqrt();
         self.r_av[self.nr] = (self.r[self.nr] * self.r[self.nr + 1]).sqrt();

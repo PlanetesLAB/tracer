@@ -4,16 +4,16 @@ use std::io::Write;
 use std::io::{BufReader, BufWriter};
 
 use anyhow::{Result, bail};
-use extensions::types::{Matrix, RMatrix, RTensor, RTensor4, RVector, UVector};
+use codata as cc;
 use fitsio::FitsFile;
 use fitsio::hdu::FitsHdu;
 use flate2::read::GzDecoder;
 use ndarray::ArrayD;
 use ndarray::Axis;
 use ndarray::s;
+use prosia_extensions::types::{Matrix, RMatrix, RTensor, RTensor4, RVector, UVector};
 use spectre::lamda::LAMDAData;
 
-use crate::constants as cc;
 use crate::flits::config::Cell;
 
 use super::config::{FLITSConfig, Grid, Molecule, RadTransition, SimState};
@@ -429,10 +429,13 @@ fn set_boundary_conditions(c: &mut CellMatrix, grid: &Grid, flitsc: &FLITSConfig
             let xx = grid.r_av[i];
             let zz = xx / grid.theta_av[[i, j]].tan();
             let rr = (xx * xx + zz * zz).sqrt();
-            c[[i, j]].v =
-                (cc::GRAVITATIONAL_CONSTANT_CGS * flitsc.m_star * cc::SOLAR_MASS_CGS * xx * xx
-                    / (rr * rr * rr))
-                    .sqrt();
+            c[[i, j]].v = (cc::NEWTONIAN_CONSTANT_OF_GRAVITATION_CGS
+                * flitsc.m_star
+                * cc::astro::M_SUN_CGS
+                * xx
+                * xx
+                / (rr * rr * rr))
+                .sqrt();
         }
     }
 
@@ -444,19 +447,25 @@ fn set_boundary_conditions(c: &mut CellMatrix, grid: &Grid, flitsc: &FLITSConfig
         let xx_0 = grid.r_av[0];
         let zz_0 = xx_0 / grid.theta_av[[0, j]].tan();
         let rr_0 = (xx_0 * xx_0 + zz_0 * zz_0).sqrt();
-        c[[0, j]].v =
-            (cc::GRAVITATIONAL_CONSTANT_CGS * flitsc.m_star * cc::SOLAR_MASS_CGS * xx_0 * xx_0
-                / (rr_0 * rr_0 * rr_0))
-                .sqrt();
+        c[[0, j]].v = (cc::NEWTONIAN_CONSTANT_OF_GRAVITATION_CGS
+            * flitsc.m_star
+            * cc::astro::M_SUN_CGS
+            * xx_0
+            * xx_0
+            / (rr_0 * rr_0 * rr_0))
+            .sqrt();
         c[[0, j]].dens = 1e-60;
 
         let xx_nr = grid.r_av[grid.nr];
         let zz_nr = xx_nr / grid.theta_av[[grid.nr, j]].tan();
         let rr_nr = (xx_nr * xx_nr + zz_nr * zz_nr).sqrt();
-        c[[grid.nr, j]].v =
-            (cc::GRAVITATIONAL_CONSTANT_CGS * flitsc.m_star * cc::SOLAR_MASS_CGS * xx_nr * xx_nr
-                / (rr_nr * rr_nr * rr_nr))
-                .sqrt();
+        c[[grid.nr, j]].v = (cc::NEWTONIAN_CONSTANT_OF_GRAVITATION_CGS
+            * flitsc.m_star
+            * cc::astro::M_SUN_CGS
+            * xx_nr
+            * xx_nr
+            / (rr_nr * rr_nr * rr_nr))
+            .sqrt();
         c[[grid.nr, j]].dens = 1e-60;
     }
 
@@ -466,10 +475,13 @@ fn set_boundary_conditions(c: &mut CellMatrix, grid: &Grid, flitsc: &FLITSConfig
         let xx = grid.r_av[i];
         let zz = xx / grid.theta_av[[i, 0]].tan();
         let rr = (xx * xx + zz * zz).sqrt();
-        c[[i, 0]].v =
-            (cc::GRAVITATIONAL_CONSTANT_CGS * flitsc.m_star * cc::SOLAR_MASS_CGS * xx * xx
-                / (rr * rr * rr))
-                .sqrt();
+        c[[i, 0]].v = (cc::NEWTONIAN_CONSTANT_OF_GRAVITATION_CGS
+            * flitsc.m_star
+            * cc::astro::M_SUN_CGS
+            * xx
+            * xx
+            / (rr * rr * rr))
+            .sqrt();
         c[[i, 0]].dens = 1e-60;
     }
 }
@@ -480,7 +492,7 @@ fn set_boundary_conditions(c: &mut CellMatrix, grid: &Grid, flitsc: &FLITSConfig
 /// If any of the LAMDA files cannot be found or read properly, an error is returned.
 pub fn read_lamda_files(flitsc: &FLITSConfig) -> Result<Vec<Molecule>> {
     let mut mol = Vec::with_capacity(flitsc.line_files.len());
-    let two_h_over_c2 = 2.0 * cc::PLANCK_CGS / cc::SPEED_OF_LIGHT_CGS.powi(2);
+    let two_h_over_c2 = 2.0 * cc::PLANCK_CONSTANT_CGS / cc::SPEED_OF_LIGHT_IN_VACUUM_CGS.powi(2);
 
     for line_file in &flitsc.line_files {
         let data = LAMDAData::from_path(flitsc.config_dir.join(line_file))?;
@@ -519,7 +531,7 @@ pub fn read_lamda_files(flitsc: &FLITSConfig) -> Result<Vec<Molecule>> {
                     einst_b_ul: bul,
                     einst_b_lu: blu,
                     freq,
-                    lam: cc::SPEED_OF_LIGHT_CGS * 1e4 / freq,
+                    lam: cc::SPEED_OF_LIGHT_IN_VACUUM_CGS * 1e4 / freq,
                     energy: rad.energy,
                 }
             })
@@ -540,11 +552,11 @@ pub fn write_image_grid(imr: &[f64], r_sph_val: f64) -> Result<()> {
     let file = File::create("output/imagegrid.out")?;
     let mut writer = BufWriter::new(file);
 
-    writeln!(writer, "{}", r_sph_val / cc::AU_CGS)?;
+    writeln!(writer, "{}", r_sph_val / cc::astro::AU_CGS)?;
     writeln!(writer)?; // empty line
 
     for val in imr {
-        writeln!(writer, "{}", val / cc::AU_CGS)?;
+        writeln!(writer, "{}", val / cc::astro::AU_CGS)?;
     }
 
     Ok(())
