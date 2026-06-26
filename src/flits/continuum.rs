@@ -1,6 +1,6 @@
 //! Continuum ray-tracing
 
-use prosia_extensions::types::{RMatrix, RVector};
+use planetes_ext::types::{RMatrix, RVector};
 
 use crate::utils::physics::planck;
 

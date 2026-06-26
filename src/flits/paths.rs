@@ -2,11 +2,11 @@ use std::f64::consts::PI;
 
 use anyhow::Result;
 use ndarray::array;
-use prosia_extensions::{
+use planetes_ext::{
     arrays::ArrayExtrema,
     types::{BVector, Matrix, RMatrix, UMatrix, UVector},
 };
-use rand::Rng;
+use rand::RngExt;
 
 use crate::flits::{
     config::{AccuracyLevel, FLITSConfig, Grid, Path, Rotate, SimState},

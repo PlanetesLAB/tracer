@@ -12,8 +12,8 @@ use ndarray::Array2;
 use ndarray::Zip;
 use ndarray::array;
 use ndarray::s;
-use prosia_extensions::types::RTensor4;
-use prosia_extensions::types::{BVector, RMatrix, RTensor, RVector, UVector, Vector};
+use planetes_ext::types::RTensor4;
+use planetes_ext::types::{BVector, RMatrix, RTensor, RVector, UVector, Vector};
 use spectre::lamda::Level;
 
 pub type PLVector = Vector<PopulationLevels>;

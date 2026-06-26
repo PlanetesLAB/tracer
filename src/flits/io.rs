@@ -11,7 +11,7 @@ use flate2::read::GzDecoder;
 use ndarray::ArrayD;
 use ndarray::Axis;
 use ndarray::s;
-use prosia_extensions::types::{Matrix, RMatrix, RTensor, RTensor4, RVector, UVector};
+use planetes_ext::types::{Matrix, RMatrix, RTensor, RTensor4, RVector, UVector};
 use spectre::lamda::LAMDAData;
 
 use crate::flits::config::Cell;

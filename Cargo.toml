@@ -10,9 +10,9 @@ flate2 = "1.1.9"
 ndarray = "0.17.2"
 rand = "0.10.1"
 rayon = "1.12.0"
-spectre = { git = "https://github.com/ProsiaLAB/spectre.git" }
+spectre = { git = "https://github.com/PlanetesLAB/spectre.git" }
 codata = "0.2.0"
-prosia-extensions = "0.2.1"
+planetes-ext = { git = "https://github.com/PlanetesLAB/planetes-ext.git", tag = "v0.2.0" }
 
 [profile.release]
 lto = true        # Link-time optimization

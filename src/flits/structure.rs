@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use codata as cc;
-use prosia_extensions::types::{RVector, UVector};
+use planetes_ext::types::{RVector, UVector};
 
 use super::config::{FLITSConfig, PLVector, SimState};
 use super::local::compute_LTE;
