@@ -354,7 +354,7 @@ fn extract_data(fptr: &mut FitsFile, hdu: &FitsHdu, naxis: usize) -> Result<RTen
             let data_permuted = data3.permuted_axes([2, 1, 0]);
             Ok(data_permuted.insert_axis(Axis(3)))
         }
-        _ => Err(anyhow::anyhow!("Unsupported number of axes: {}", naxis)),
+        _ => Err(anyhow::anyhow!("Unsupported number of axes: {naxis}")),
     }
 }
 
@@ -519,7 +519,7 @@ pub fn read_lamda_files(flitsc: &FLITSConfig) -> Result<Vec<Molecule>> {
             .map(|rad| {
                 let ilow = rad.low - 1; // zero-based index
                 let iup = rad.up - 1;
-                let freq = rad.freq * 1e9; // GHz → Hz
+                let freq = rad.freq * 1e9; // GHz to Hz
                 let bul = rad.einst_a / (two_h_over_c2 * freq.powi(3));
                 let blu = bul * molecule.levels[iup].weight / molecule.levels[ilow].weight;
 

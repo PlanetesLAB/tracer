@@ -8,7 +8,7 @@ pub enum EscapeGeometry {
     /// Homogeneous sphere (Osterbrock 1974, Appendix 2).
     UniformSphere,
     ExpandingSphere,
-    /// Plane-parallel closure with effective depth 3τ (de Jong et al. 1975, ApJ 199, 69).
+    /// Plane-parallel closure with effective depth $3\tau$ (de Jong et al. 1975, ApJ 199, 69).
     PlaneParallelSlab,
 }
 
