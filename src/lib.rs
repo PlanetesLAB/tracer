@@ -5,6 +5,7 @@
 #![allow(clippy::doc_markdown)]
 
 pub mod collision;
+pub mod equilibrium;
 pub mod escape;
 pub mod flits;
 pub mod line;

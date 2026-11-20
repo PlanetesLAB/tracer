@@ -2,7 +2,8 @@
 
 use anyhow::Result;
 use anyhow::ensure;
-use ndarray::Array2;
+use planetes_ext::interp::linear;
+use planetes_ext::types::RMatrix;
 
 /// A molecular level, indexed by its position in the supplied level list.
 pub struct Level {
@@ -82,11 +83,11 @@ pub fn collision_rates(
     levels: &[Level],
     temperature_k: f64,
     colliders: &[Collider<'_>],
-) -> Result<Array2<f64>> {
+) -> Result<RMatrix> {
     check_temperature(temperature_k)?;
     check_levels(levels)?;
 
-    let mut rates = Array2::<f64>::zeros((levels.len(), levels.len()));
+    let mut rates = RMatrix::zeros((levels.len(), levels.len()));
     for collider in colliders {
         ensure!(
             collider.density.is_finite() && collider.density >= 0.0,
@@ -100,15 +101,6 @@ pub fn collision_rates(
             "expected strictly increasing positive collision temperatures"
         );
 
-        let hi = grid
-            .partition_point(|&t| t < temperature_k)
-            .min(grid.len() - 1);
-        let lo = hi.saturating_sub(1);
-        let fraction = if lo == hi {
-            0.0
-        } else {
-            (temperature_k.min(grid[hi]) - grid[lo]) / (grid[hi] - grid[lo])
-        };
         for transition in collider.transitions {
             let (u, l) = (transition.upper, transition.lower);
             ensure!(
@@ -123,7 +115,7 @@ pub fn collision_rates(
                 k.len() == grid.len() && k.iter().all(|x| x.is_finite() && *x >= 0.0),
                 "invalid coefficients for transition {u} -> {l}"
             );
-            let downward = collider.density * ((1.0 - fraction) * k[lo] + fraction * k[hi]);
+            let downward = collider.density * linear(temperature_k, grid, k);
             let gap_k = codata::SECOND_RADIATION_CONSTANT_CGS
                 * (levels[u].wavenumber - levels[l].wavenumber);
             rates[[u, l]] += downward;

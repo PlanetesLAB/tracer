@@ -12,7 +12,8 @@ rand = "0.10.1"
 rayon = "1.12.0"
 spectre = { git = "https://github.com/PlanetesLAB/spectre.git" }
 codata = "0.2.0"
-planetes-ext = { git = "https://github.com/PlanetesLAB/planetes-ext.git", tag = "v0.2.0" }
+planetes-ext = { git = "https://github.com/PlanetesLAB/planetes-ext.git", tag = "v1.8.0" }
+nalgebra = { version = "0.35.0", default-features = false, features = ["std"] }
 
 [profile.release]
 lto = true        # Link-time optimization
