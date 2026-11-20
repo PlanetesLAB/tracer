@@ -1,6 +1,6 @@
 # tracer
 
-Implementation of FLITS (Fast LIne Tracer) and RADLite in the Rust programming language.
+Rust library for molecular excitation and radiative transfer.
 
 > [!WARNING]
 > Under development &mdash; not yet ready for production.

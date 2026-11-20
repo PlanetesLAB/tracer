@@ -4,14 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.102"
-fitsio = { version = "0.21.10", features = ["array"] }
-flate2 = "1.1.9"
-ndarray = "0.17.2"
-rand = "0.10.1"
-rayon = "1.12.0"
-spectre = { git = "https://github.com/PlanetesLAB/spectre.git" }
-codata = "0.2.0"
+anyhow = "1.0.104"
+codata = "0.2.2"
 planetes-ext = { git = "https://github.com/PlanetesLAB/planetes-ext.git", tag = "v1.8.0" }
 nalgebra = { version = "0.35.0", default-features = false, features = ["std"] }
 
