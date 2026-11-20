@@ -3,6 +3,7 @@
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::cast_precision_loss)]
 
+pub mod escape;
 pub mod flits;
 pub mod lite;
 pub mod utils;
