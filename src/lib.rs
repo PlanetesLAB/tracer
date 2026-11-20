@@ -6,5 +6,6 @@ pub mod collision;
 pub mod equilibrium;
 pub mod escape;
 pub mod line;
+pub mod observable;
 pub mod trapping;
 pub mod utils;

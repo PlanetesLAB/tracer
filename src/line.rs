@@ -107,6 +107,11 @@ pub struct LineCoefficients {
     pub absorption: f64,
 }
 
+/// Line-centre spontaneous emissivity per upper-level number density.
+pub(crate) fn emission_per_particle(einstein_a: f64, width: DopplerWidth) -> f64 {
+    H_CGS * C_CGS * einstein_a / (4.0 * PI * PI.sqrt() * width.b())
+}
+
 /// Line-centre absorption cross section per unit population difference,
 /// $A_{ul}\lambda^3/(8\pi^{3/2}b)$ in $\mathrm{cm^2}$.
 pub(crate) fn absorption_cross_section(
@@ -149,9 +154,8 @@ pub fn line_centre(
         "invalid spontaneous rate or level density"
     );
     let wavelength = C_CGS / frequency_hz;
-    let scale = einstein_a / (4.0 * PI * PI.sqrt() * width.b());
     Ok(LineCoefficients {
-        emissivity: scale * H_CGS * C_CGS * upper_density,
+        emissivity: emission_per_particle(einstein_a, width) * upper_density,
         absorption: absorption_cross_section(wavelength, einstein_a, width)
             * (weight_ratio * lower_density - upper_density),
     })
