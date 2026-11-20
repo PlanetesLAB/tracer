@@ -130,7 +130,7 @@ impl FLITSConfig {
 
         for line in lines {
             let (key, value) = line.split_once('=').ok_or_else(|| {
-                anyhow::anyhow!("Invalid line format, expected 'key=value': {}", line)
+                anyhow::anyhow!("Invalid line format, expected 'key=value': {line}")
             })?;
             // Remove quotes
             let value = value.trim_matches('\'');
@@ -138,26 +138,29 @@ impl FLITSConfig {
                 self.line_files.push(value.to_string());
             }
             if key == "lmin" {
-                let value = value.split_whitespace().next().ok_or_else(|| {
-                    anyhow::anyhow!("Expected a value for lmin in line: {}", line)
-                })?;
+                let value = value
+                    .split_whitespace()
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("Expected a value for lmin in line: {line}"))?;
                 self.lmin = value.parse::<f64>().expect("Failed to parse lmin");
             }
             if key == "lmax" {
-                let value = value.split_whitespace().next().ok_or_else(|| {
-                    anyhow::anyhow!("Expected a value for lmax in line: {}", line)
-                })?;
+                let value = value
+                    .split_whitespace()
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("Expected a value for lmax in line: {line}"))?;
                 self.lmax = value.parse::<f64>().expect("Failed to parse lmax");
             }
             if key == "vres" {
-                let value = value.split_whitespace().next().ok_or_else(|| {
-                    anyhow::anyhow!("Expected a value for vres in line: {}", line)
-                })?;
+                let value = value
+                    .split_whitespace()
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("Expected a value for vres in line: {line}"))?;
                 self.vresolution = value.parse::<f64>().expect("Failed to parse vres");
             }
             if key == "vres_profile" {
                 let value = value.split_whitespace().next().ok_or_else(|| {
-                    anyhow::anyhow!("Expected a value for vres_profile in line: {}", line)
+                    anyhow::anyhow!("Expected a value for vres_profile in line: {line}")
                 })?;
                 if value.contains('d') {
                     // replace with e
@@ -175,7 +178,7 @@ impl FLITSConfig {
                 } else if value.contains("false") || value.contains('0') {
                     self.LTE = false;
                 } else {
-                    return Err(anyhow::anyhow!("Invalid value for LTE in line: {}", line));
+                    return Err(anyhow::anyhow!("Invalid value for LTE in line: {line}"));
                 }
             }
             if key == "inc" {
@@ -193,8 +196,7 @@ impl FLITSConfig {
                     "5" => AccuracyLevel::MaxSampling,
                     _ => {
                         return Err(anyhow::anyhow!(
-                            "Invalid value for accuracy in line: {}",
-                            line
+                            "Invalid value for accuracy in line: {line}",
                         ));
                     }
                 };
