@@ -9,6 +9,7 @@ use crate::collision::Level;
 use crate::collision::check_levels;
 
 /// Radiative transition with a prescribed background at its line frequency.
+#[derive(Clone, Copy, Debug)]
 pub struct RadiativeTransition {
     pub upper: usize,
     pub lower: usize,

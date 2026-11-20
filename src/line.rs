@@ -107,6 +107,16 @@ pub struct LineCoefficients {
     pub absorption: f64,
 }
 
+/// Line-centre absorption cross section per unit population difference,
+/// $A_{ul}\lambda^3/(8\pi^{3/2}b)$ in $\mathrm{cm^2}$.
+pub(crate) fn absorption_cross_section(
+    wavelength_cm: f64,
+    einstein_a: f64,
+    width: DopplerWidth,
+) -> f64 {
+    einstein_a * wavelength_cm.powi(3) / (8.0 * PI * PI.sqrt() * width.b())
+}
+
 /// Evaluates the Gaussian line centre for arbitrary level populations.
 /// Supply the rest frequency in Hz, spontaneous rate in $\mathrm{s^{-1}}$,
 /// upper-to-lower statistical weight ratio, and level number densities in
@@ -142,9 +152,7 @@ pub fn line_centre(
     let scale = einstein_a / (4.0 * PI * PI.sqrt() * width.b());
     Ok(LineCoefficients {
         emissivity: scale * H_CGS * C_CGS * upper_density,
-        absorption: scale
-            * 0.5
-            * wavelength.powi(3)
+        absorption: absorption_cross_section(wavelength, einstein_a, width)
             * (weight_ratio * lower_density - upper_density),
     })
 }
