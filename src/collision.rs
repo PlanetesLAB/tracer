@@ -1,6 +1,7 @@
 //! Inelastic collision rates for molecular excitation.
 
-use anyhow::{Result, ensure};
+use anyhow::Result;
+use anyhow::ensure;
 use ndarray::Array2;
 
 /// A molecular level, indexed by its position in the supplied level list.
@@ -9,6 +10,17 @@ pub struct Level {
     pub wavenumber: f64,
     /// Statistical weight (degeneracy).
     pub weight: f64,
+}
+
+pub(crate) fn check_levels(levels: &[Level]) -> Result<()> {
+    ensure!(!levels.is_empty(), "empty level list");
+    for level in levels {
+        ensure!(
+            level.wavenumber.is_finite() && level.weight.is_finite() && level.weight > 0.0,
+            "invalid level energy or weight"
+        );
+    }
+    Ok(())
 }
 
 /// Downward rate coefficients ($\mathrm{cm^{3}\,s^{-1}}$) on the collider's temperature grid.
@@ -45,7 +57,7 @@ pub fn thermal_h2_densities(total: f64, temperature_k: f64) -> Result<(f64, f64)
     Ok((para, para * ratio))
 }
 
-fn check_temperature(temperature_k: f64) -> Result<()> {
+pub(crate) fn check_temperature(temperature_k: f64) -> Result<()> {
     ensure!(
         temperature_k.is_finite() && temperature_k > 0.0,
         "invalid kinetic temperature"
@@ -72,13 +84,7 @@ pub fn collision_rates(
     colliders: &[Collider<'_>],
 ) -> Result<Array2<f64>> {
     check_temperature(temperature_k)?;
-    ensure!(!levels.is_empty(), "empty level list");
-    for level in levels {
-        ensure!(
-            level.wavenumber.is_finite() && level.weight.is_finite() && level.weight > 0.0,
-            "invalid level energy or weight"
-        );
-    }
+    check_levels(levels)?;
 
     let mut rates = Array2::<f64>::zeros((levels.len(), levels.len()));
     for collider in colliders {

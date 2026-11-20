@@ -7,5 +7,6 @@
 pub mod collision;
 pub mod escape;
 pub mod flits;
+pub mod line;
 pub mod lite;
 pub mod utils;
