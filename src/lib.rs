@@ -7,5 +7,6 @@ pub mod equilibrium;
 pub mod escape;
 pub mod line;
 pub mod observable;
+pub mod transfer;
 pub mod trapping;
 pub mod utils;

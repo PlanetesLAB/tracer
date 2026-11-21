@@ -8,6 +8,7 @@ use codata::aliases::{C_CGS, H_CGS, K_CGS};
 
 use crate::line::DopplerWidth;
 use crate::line::{absorption_cross_section, emission_per_particle};
+use crate::transfer::mean_transmission;
 
 /// Homogeneous-source observables for one transition.
 pub struct LineObservables {
@@ -85,12 +86,10 @@ pub fn homogeneous_line(
     let emission = emission_per_particle(einstein_a, width) * upper_column;
     // Integrate emissivity directly to keep the zero-opacity limit finite.
     let absorbed = -(-optical_depth).exp_m1();
-    let attenuation = if optical_depth == 0.0 {
-        1.0
-    } else {
-        absorbed / optical_depth
-    };
-    let excess_intensity = emission.mul_add(attenuation, -background_intensity * absorbed);
+    let excess_intensity = emission.mul_add(
+        mean_transmission(optical_depth),
+        -background_intensity * absorbed,
+    );
     let radiation_temperature = excess_intensity * wavelength.powi(2) / (2.0 * K_CGS);
     let velocity_area = PI.sqrt() * width.b();
     let integrated_temperature = radiation_temperature * velocity_area / 1e5;
