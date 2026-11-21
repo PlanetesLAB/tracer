@@ -8,5 +8,6 @@ pub mod escape;
 pub mod line;
 pub mod observable;
 pub mod profile;
+pub mod subdivision;
 pub mod transfer;
 pub mod trapping;
