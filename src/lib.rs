@@ -10,4 +10,3 @@ pub mod observable;
 pub mod profile;
 pub mod transfer;
 pub mod trapping;
-pub mod utils;

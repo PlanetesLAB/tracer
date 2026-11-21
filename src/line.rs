@@ -5,6 +5,7 @@ use std::f64::consts::{LN_2, PI};
 use anyhow::Result;
 use anyhow::ensure;
 use codata::aliases::{C_CGS, H_CGS};
+use planetes_ext::physics::doppler_b;
 
 use crate::collision::Level;
 use crate::collision::{check_levels, check_temperature};
@@ -82,7 +83,7 @@ impl DopplerWidth {
             turbulent_b.is_finite() && turbulent_b >= 0.0,
             "invalid turbulent width"
         );
-        let thermal = (2.0 * codata::BOLTZMANN_CONSTANT_CGS * temperature_k / mass_g).sqrt();
+        let thermal = doppler_b(temperature_k, mass_g);
         Self::from_b(thermal.hypot(turbulent_b))
     }
 
