@@ -153,9 +153,10 @@ dependencies = [
 
 [[package]]
 name = "planetes-ext"
-version = "1.8.0"
-source = "git+https://github.com/PlanetesLAB/planetes-ext.git?tag=v1.8.0#70ccd5f49f38d3ddf15a042e9a508a0468e802b0"
+version = "1.9.0"
+source = "git+https://github.com/PlanetesLAB/planetes-ext.git?tag=v1.9.0#abe73eccb1df3f32538dfb506bacec74a02be02f"
 dependencies = [
+ "codata",
  "ndarray",
  "num-traits",
 ]

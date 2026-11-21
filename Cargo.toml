@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0.104"
 codata = "0.2.2"
-planetes-ext = { git = "https://github.com/PlanetesLAB/planetes-ext.git", tag = "v1.8.0" }
+planetes-ext = { git = "https://github.com/PlanetesLAB/planetes-ext.git", tag = "v1.9.0" }
 nalgebra = { version = "0.35.0", default-features = false, features = ["std"] }
 
 [profile.release]
